@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0612">
+  <meta name="description" content="按一下按钮，抽一鞭代肝人，好感度随机 +1。">
+  <link rel="canonical" href="https://heimaojingzhang.xin/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="代肝催工事务所 · 好感度+1">
+  <meta property="og:description" content="按一下按钮，抽一鞭代肝人，好感度随机 +1。">
+  <meta property="og:url" content="https://heimaojingzhang.xin/">
+  <meta property="og:image" content="https://heimaojingzhang.xin/preview.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 29'%3E%3Cpath fill='%23ff2d6f' d='M16 28S2 18 2 9.5C2 4.8 5.8 1 10.5 1c2.6 0 4.6 1.2 5.5 2.6C16.9 2.2 18.9 1 21.5 1 26.2 1 30 4.8 30 9.5 30 18 16 28 16 28Z'/%3E%3C/svg%3E">
+  <title>代肝催工事务所 · 好感度+1</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- 背景层 -->
+  <div class="bg" aria-hidden="true">
+    <div class="bg-grid"></div>
+    <div class="bg-glow g1"></div>
+    <div class="bg-glow g2"></div>
+    <div class="bg-glow g3"></div>
+    <div class="bg-hearts" id="bgHearts"></div>
+  </div>
+
+  <!-- 顶部 HUD -->
+  <header class="hud">
+    <div class="brand">
+      <span class="brand-icon">✦</span>
+      <span class="brand-text">代肝催工事务所</span>
+    </div>
+    <div class="hud-stats">
+      <div class="stat stat-affection">
+        <span class="stat-label">好感度</span>
+        <span class="stat-value" id="affectionValue">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">已催促</span>
+        <span class="stat-value stat-value--small" id="whippedValue">0</span>
+        <span class="stat-unit">次</span>
+      </div>
+      <div class="stat stat-combo" id="comboStat">
+        <span class="stat-label">连击</span>
+        <span class="stat-value stat-value--small" id="comboValue">×0</span>
+      </div>
+      <button class="sound-toggle" id="soundToggle" type="button" aria-pressed="true" aria-label="关闭音效" title="关闭音效">🔊</button>
+    </div>
+  </header>
+
+  <!-- 连击里程碑鼓励语 -->
+  <div class="encourage" id="encourage" role="status" aria-live="polite">
+    <div class="encourage-icon" aria-hidden="true">🔥</div>
+    <div class="encourage-body">
+      <div class="encourage-title" id="encourageTitle">连击 ×5！</div>
+      <div class="encourage-text" id="encourageText">手感不错，继续保持！</div>
+    </div>
+  </div>
+
+  <!-- 主舞台 -->
+  <main class="stage">
+    <div class="avatar-card" id="avatarCard">
+      <div class="avatar-wrap" id="avatarWrap">
+        <div class="ring ring-outer" aria-hidden="true"></div>
+        <div class="ring ring-dashed" aria-hidden="true"></div>
+
+        <div class="avatar-frame" id="avatarFrame" title="点它一鞭">
+          <img class="avatar-img" id="avatarImg" src="assets/placeholder.svg" alt="被催促的代肝人头像" draggable="false">
+          <div class="slash-layer" aria-hidden="true">
+            <span class="slash s1"></span>
+            <span class="slash s2"></span>
+            <span class="slash s3"></span>
+          </div>
+          <div class="hit-flash" aria-hidden="true"></div>
+        </div>
+
+        <div class="impact" id="impact" aria-hidden="true"></div>
+        <div class="pop-layer" id="popLayer" aria-hidden="true"></div>
+
+        <!-- 鞭子 -->
+        <div class="whip-layer" id="whipLayer" aria-hidden="true">
+          <svg class="whip-svg" viewBox="0 0 460 460" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="lashGradient" x1="392" y1="372" x2="118" y2="116" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#ffd166"/>
+                <stop offset="0.55" stop-color="#ffe9c7"/>
+                <stop offset="1" stop-color="#fff7ea"/>
+              </linearGradient>
+            </defs>
+            <path class="whip-lash-shadow" pathLength="1" d="M392 372C352 330 320 268 288 244C256 220 214 214 178 186C152 166 132 142 118 116"/>
+            <path class="whip-lash-glow" d="M392 372C352 330 320 268 288 244C256 220 214 214 178 186C152 166 132 142 118 116"/>
+            <path class="whip-lash" pathLength="1" stroke="url(#lashGradient)" d="M392 372C352 330 320 268 288 244C256 220 214 214 178 186C152 166 132 142 118 116"/>
+            <path class="whip-handle" d="M422 424L394 376"/>
+            <path class="whip-handle-wrap" d="M406 396L414 408M399 384L407 396"/>
+            <circle class="whip-tip" cx="118" cy="116" r="8"/>
+          </svg>
+        </div>
+
+        <button class="avatar-edit" id="avatarEdit" type="button" aria-label="更换头像" title="更换头像">📷</button>
+        <div class="drop-hint" id="dropHint" aria-hidden="true">松手，换上新头像</div>
+      </div>
+
+      <div class="meta-row">
+        <div class="nameplate">
+          <span class="status-dot" aria-hidden="true"></span>
+          代肝人 · <span id="statusText">在线摸鱼中</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="action">
+      <button class="whip-btn" id="whipBtn" type="button">
+        <span class="whip-btn-icon" aria-hidden="true">⚡</span>
+        <span class="whip-btn-text">催促代肝干活</span>
+      </button>
+      <p class="hint">按一下抽一鞭，好感度涨一涨；连抽 5 下有惊喜（？）</p>
+    </div>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <input type="file" id="avatarInput" accept="image/*" hidden>
+
+  <script src="app.js"></script>
+</body>
+</html>
