@@ -23,9 +23,7 @@
     navUser: $('#navUser'),
     logoutBtn: $('#logoutBtn'),
     loginForm: $('#loginForm'),
-    signupForm: $('#signupForm'),
     authMsg: $('#authMsg'),
-    tabs: $$('.tab'),
     bossWelcome: $('#bossWelcome'),
     ownerWelcome: $('#ownerWelcome'),
     requestForm: $('#requestForm'),
@@ -182,24 +180,8 @@
     els.bossView.hidden = true;
     els.ownerView.hidden = true;
     els.authView.hidden = false;
-    switchTab('login');
     setAuthMessage('', '');
   }
-
-  function switchTab(name) {
-    els.tabs.forEach(function (tab) {
-      tab.classList.toggle('is-active', tab.getAttribute('data-tab') === name);
-    });
-    els.loginForm.hidden = name !== 'login';
-    els.signupForm.hidden = name !== 'signup';
-    setAuthMessage('', '');
-  }
-
-  els.tabs.forEach(function (tab) {
-    tab.addEventListener('click', function () {
-      switchTab(tab.getAttribute('data-tab'));
-    });
-  });
 
   els.loginForm.addEventListener('submit', async function (event) {
     event.preventDefault();
@@ -220,59 +202,6 @@
       if (res.error) throw res.error;
       setAuthMessage('登录成功。', 'ok');
       if (res.data && res.data.user) applySession({ user: res.data.user });
-    } catch (err) {
-      setAuthMessage(friendlyError(err), 'error');
-    } finally {
-      setFormBusy(form, false);
-    }
-  });
-
-  els.signupForm.addEventListener('submit', async function (event) {
-    event.preventDefault();
-    var form = event.currentTarget;
-    var nickname = form.display_name.value.trim();
-    var email = form.email.value.trim();
-    var password = form.password.value;
-    var confirm = form.confirm.value;
-
-    if (!nickname) {
-      setAuthMessage('请填写老板昵称。', 'error');
-      return;
-    }
-    if (!email) {
-      setAuthMessage('请填写邮箱。', 'error');
-      return;
-    }
-    if (password.length < 6) {
-      setAuthMessage('密码至少 6 位。', 'error');
-      return;
-    }
-    if (password !== confirm) {
-      setAuthMessage('两次输入的密码不一致。', 'error');
-      return;
-    }
-
-    setFormBusy(form, true);
-    setAuthMessage('注册中…', '');
-
-    try {
-      var res = await sb.auth.signUp({
-        email: email,
-        password: password,
-        options: { data: { display_name: nickname } }
-      });
-
-      if (res.error) throw res.error;
-
-      if (res.data && res.data.session) {
-        setAuthMessage('注册成功，正在进入…', 'ok');
-        if (res.data.user) applySession({ user: res.data.user });
-      } else {
-        setAuthMessage('注册成功，但还需要验证邮箱。请查收邮件并点击确认链接后再登录。', 'ok');
-        switchTab('login');
-        els.loginForm.email.value = email;
-        setAuthMessage('注册成功，请查收邮箱确认后登录。', 'ok');
-      }
     } catch (err) {
       setAuthMessage(friendlyError(err), 'error');
     } finally {

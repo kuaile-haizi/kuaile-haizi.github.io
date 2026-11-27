@@ -48,17 +48,15 @@
           账号和联系方式只有店主可见，处理进度会同步显示。
         </p>
         <ul class="feature-list">
-          <li><span>01</span> 老板邮箱+密码注册，随时查看进度</li>
+          <li><span>01</span> 账号由店主开通，登录后即可提交需求</li>
           <li><span>02</span> 需求提交后等待店主接受 / 驳回</li>
           <li><span>03</span> 完成后店主会标记并留言通知</li>
         </ul>
       </div>
 
       <div class="panel auth-panel">
-        <div class="tabs" role="tablist">
-          <button class="tab is-active" type="button" data-tab="login">登录</button>
-          <button class="tab" type="button" data-tab="signup">注册</button>
-        </div>
+        <h2 class="auth-title">登录老板账号</h2>
+        <p class="auth-sub">账号由店主创建并发放；忘记密码可以联系店主重置。</p>
 
         <form class="form" id="loginForm" novalidate>
           <label class="field">
@@ -67,31 +65,10 @@
           </label>
           <label class="field">
             <span>密码</span>
-            <input type="password" name="password" autocomplete="current-password" placeholder="至少 6 位" required>
+            <input type="password" name="password" autocomplete="current-password" placeholder="输入店主发给你的密码" required>
           </label>
           <button class="btn btn-primary" type="submit">登录</button>
           <p class="form-hint">店主账号也用这里登录，登录后会自动进入后台。</p>
-        </form>
-
-        <form class="form" id="signupForm" hidden novalidate>
-          <label class="field">
-            <span>老板昵称</span>
-            <input type="text" name="display_name" maxlength="24" autocomplete="nickname" placeholder="例如：小王" required>
-          </label>
-          <label class="field">
-            <span>邮箱</span>
-            <input type="email" name="email" autocomplete="email" placeholder="用于登录，不会公开" required>
-          </label>
-          <label class="field">
-            <span>密码</span>
-            <input type="password" name="password" autocomplete="new-password" placeholder="至少 6 位" required>
-          </label>
-          <label class="field">
-            <span>确认密码</span>
-            <input type="password" name="confirm" autocomplete="new-password" placeholder="再输一次" required>
-          </label>
-          <button class="btn btn-primary" type="submit">注册账号</button>
-          <p class="form-hint">注册后即可提交需求；账号仅用于本留言板。</p>
         </form>
 
         <p class="form-msg" id="authMsg" role="status"></p>
@@ -182,6 +159,14 @@
           <button class="filter" type="button" data-filter="rejected">已驳回 <span id="countRejected">0</span></button>
           <button class="filter" type="button" data-filter="completed">已完成 <span id="countCompleted">0</span></button>
         </div>
+      </div>
+
+      <div class="panel owner-help">
+        <div>
+          <b>老板账号由你创建后发放</b>
+          <p>在 Supabase 后台打开「Authentication → Users → Add user」，填老板邮箱和密码并勾选 Auto Confirm，然后把邮箱+密码发给老板。老板打开本页登录即可提交需求。</p>
+        </div>
+        <a class="btn btn-ghost btn-sm" href="https://supabase.com/dashboard/project/hxxqacdeioshtvzhgroj/auth/users" target="_blank" rel="noreferrer">打开用户管理 →</a>
       </div>
 
       <div class="request-list admin-list" id="adminList">
