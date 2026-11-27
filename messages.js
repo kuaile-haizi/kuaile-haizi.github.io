@@ -36,6 +36,11 @@
     ownerMore: $('#ownerMore'),
     bossRefresh: $('#bossRefresh'),
     ownerRefresh: $('#ownerRefresh'),
+    publicNameInput: $('#publicNameInput'),
+    publicNameSave: $('#publicNameSave'),
+    publicNameMsg: $('#publicNameMsg'),
+    wallAdminList: $('#wallAdminList'),
+    wallAdminCount: $('#wallAdminCount'),
     adminList: $('#adminList'),
     cleanupBar: $('#cleanupBar'),
     statCards: $('#statCards'),
@@ -91,6 +96,8 @@
     urgeStats: null,
     bossUrgeStats: [],
     bossUrgeStatsReady: true,
+    wallPosts: [],
+    wallPostsReady: true,
     bossAccounts: [],
     bossVisible: PAGE_SIZE,
     ownerVisible: PAGE_SIZE,
@@ -160,13 +167,17 @@
         els.ownerView.hidden = false;
         els.ownerWelcome.textContent = '你正在以店主身份查看全部老板的需求。';
         await loadOwnerRequests();
-        await Promise.all([loadBossAccounts(), loadOwnerStats()]);
+        await Promise.all([loadBossAccounts(), loadOwnerStats(), loadWallAdmin()]);
       } else {
         els.authView.hidden = true;
         els.ownerView.hidden = true;
         els.bossView.hidden = false;
         document.title = '老板留言 · 代肝催工事务所';
         els.bossWelcome.textContent = '你好，' + name + '。在这里提交需求，并随时查看店主处理到哪一步。';
+        if (els.publicNameInput) {
+          els.publicNameInput.value = (state.profile && state.profile.public_name) || '';
+        }
+        setPublicNameMessage('', '');
         await loadBossRequests();
       }
 
@@ -182,9 +193,19 @@
   async function fetchProfile(userId) {
     var res = await sb
       .from('profiles')
-      .select('display_name, email, role')
+      .select('display_name, email, role, public_name')
       .eq('id', userId)
       .maybeSingle();
+
+    // 迁移 008 还没跑时，public_name 字段不存在；退回旧字段，保证页面能打开
+    if (res.error && /public_name/i.test(res.error.message || '')) {
+      res = await sb
+        .from('profiles')
+        .select('display_name, email, role')
+        .eq('id', userId)
+        .maybeSingle();
+      if (res.data) res.data.public_name = '';
+    }
 
     if (res.error) {
       // 没有 profile 时不要直接崩，后面可以提示；这里只记录
@@ -213,6 +234,8 @@
     state.urgeStats = null;
     state.bossUrgeStats = [];
     state.bossUrgeStatsReady = true;
+    state.wallPosts = [];
+    state.wallPostsReady = true;
     state.bossAccounts = [];
     state.ownerLoaded = false;
     state.bossLoaded = false;
@@ -670,6 +693,94 @@
         '</div>'
       );
     }).join('');
+  }
+
+  async function loadWallAdmin() {
+    if (!els.wallAdminList) return;
+
+    els.wallAdminList.innerHTML = '<p class="empty">加载中…</p>';
+
+    try {
+      var res = await sb.rpc('owner_wall_posts', { p_limit: 40 });
+      if (res.error) throw res.error;
+      state.wallPosts = Array.isArray(res.data) ? res.data : [];
+      state.wallPostsReady = true;
+    } catch (err) {
+      console.warn('读取首页留言墙失败', err);
+      state.wallPosts = [];
+      state.wallPostsReady = false;
+    }
+
+    renderWallAdmin();
+  }
+
+  function renderWallAdmin() {
+    if (!els.wallAdminList) return;
+
+    if (els.wallAdminCount) {
+      els.wallAdminCount.textContent = (state.wallPosts.length || 0) + ' 条';
+    }
+
+    if (!state.wallPostsReady) {
+      els.wallAdminList.innerHTML = '<p class="empty">暂时读不到留言墙，请确认 migration-008 已运行。</p>';
+      return;
+    }
+
+    if (!state.wallPosts.length) {
+      els.wallAdminList.innerHTML = '<p class="empty">还没有老板留言。</p>';
+      return;
+    }
+
+    els.wallAdminList.innerHTML = state.wallPosts.map(function (post) {
+      var rating = Number(post.rating) || 0;
+      var starsHtml = rating ? '<span class="wall-admin-stars">' + stars(rating) + '</span>' : '';
+
+      return (
+        '<div class="wall-admin-row" data-wall-id="' + escapeHtml(String(post.id)) + '">' +
+          '<div class="wall-admin-main">' +
+            '<div class="wall-admin-top">' +
+              '<span class="wall-admin-name">' + escapeHtml(post.display_name || '老板') + '</span>' +
+              starsHtml +
+            '</div>' +
+            '<p class="wall-admin-text">' + escapeHtml(post.content) + '</p>' +
+            '<div class="wall-admin-meta">' +
+              escapeHtml(post.boss_email || '') + ' · ' + escapeHtml(formatTime(post.created_at)) +
+            '</div>' +
+          '</div>' +
+          '<button class="btn btn-sm btn-danger" type="button" data-delete-wall>删除</button>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  if (els.wallAdminList) {
+    els.wallAdminList.addEventListener('click', async function (event) {
+      var button = event.target.closest('button[data-delete-wall]');
+      if (!button) return;
+
+      var row = button.closest('[data-wall-id]');
+      var id = row ? row.getAttribute('data-wall-id') : null;
+      if (!id) return;
+
+      if (!window.confirm('删除这条首页留言吗？删除后首页立刻消失，无法恢复。')) return;
+
+      button.disabled = true;
+
+      try {
+        var res = await sb.rpc('owner_delete_wall_post', { p_id: Number(id) });
+        if (res.error) throw res.error;
+        if (res.data === false) {
+          toast('这条留言已经不存在了。');
+        } else {
+          toast('已删除首页留言。');
+        }
+        await loadWallAdmin();
+      } catch (err) {
+        console.error(err);
+        toast('删除失败：' + wallErrorText(err), true);
+        button.disabled = false;
+      }
+    });
   }
 
   function csvCell(value) {
@@ -1185,6 +1296,7 @@
         state.autoBusy = true;
         loadOwnerRequests(true)
           .then(function () { return loadOwnerStats(); })
+          .then(function () { return loadWallAdmin(); })
           .finally(function () { state.autoBusy = false; });
       } else if (!els.bossView.hidden) {
         if (hasFocusInside(els.myList)) return;
@@ -1197,7 +1309,9 @@
   document.addEventListener('visibilitychange', function () {
     if (document.hidden || !state.user || state.autoBusy || state.manualBusy) return;
     if (!els.ownerView.hidden && !hasFocusInside(els.ownerView)) {
-      loadOwnerRequests(true).then(function () { return loadOwnerStats(); });
+      loadOwnerRequests(true)
+        .then(function () { return loadOwnerStats(); })
+        .then(function () { return loadWallAdmin(); });
     } else if (!els.bossView.hidden && !hasFocusInside(els.myList)) {
       loadBossRequests(true);
     }
@@ -1418,6 +1532,41 @@
     setImageHint(file.name + ' · ' + (file.size / 1024 / 1024).toFixed(1) + 'MB');
   });
 
+  if (els.publicNameSave && els.publicNameInput) {
+    els.publicNameSave.addEventListener('click', async function () {
+      var name = els.publicNameInput.value.trim();
+
+      if (!name) {
+        setPublicNameMessage('请填写公开昵称。', 'error');
+        els.publicNameInput.focus();
+        return;
+      }
+      if (name.length > 20) {
+        setPublicNameMessage('公开昵称最多 20 个字符。', 'error');
+        return;
+      }
+
+      els.publicNameSave.disabled = true;
+      setPublicNameMessage('保存中…', '');
+
+      try {
+        var res = await sb.rpc('set_public_name', { p_name: name });
+        if (res.error) throw res.error;
+        if (res.data && res.data.error) throw new Error(res.data.error);
+
+        if (state.profile) state.profile.public_name = name;
+        els.publicNameInput.value = name;
+        setPublicNameMessage('已保存，会显示在首页留言墙。', 'ok');
+        toast('公开昵称已保存。');
+      } catch (err) {
+        console.error(err);
+        setPublicNameMessage('保存失败：' + wallErrorText(err), 'error');
+      } finally {
+        els.publicNameSave.disabled = false;
+      }
+    });
+  }
+
   els.bossRefresh.addEventListener('click', async function () {
     els.bossRefresh.disabled = true;
     await loadBossRequests();
@@ -1428,7 +1577,7 @@
   els.ownerRefresh.addEventListener('click', async function () {
     els.ownerRefresh.disabled = true;
     await loadOwnerRequests();
-    await Promise.all([loadBossAccounts(), loadOwnerStats()]);
+    await Promise.all([loadBossAccounts(), loadOwnerStats(), loadWallAdmin()]);
     els.ownerRefresh.disabled = false;
     toast('已刷新');
   });
@@ -1845,6 +1994,20 @@
   function setRequestMessage(text, type) {
     els.requestMsg.textContent = text || '';
     els.requestMsg.className = 'form-msg' + (type ? ' is-' + type : '');
+  }
+
+  function setPublicNameMessage(text, type) {
+    if (!els.publicNameMsg) return;
+    els.publicNameMsg.textContent = text || '';
+    els.publicNameMsg.className = 'form-msg' + (type ? ' is-' + type : '');
+  }
+
+  function wallErrorText(error) {
+    var message = (error && (error.message || error.error_description || error.hint)) || '操作失败';
+    if (/Could not find the function|schema cache|does not exist/i.test(message)) {
+      return '留言墙还没启用，请先运行 migration-008。';
+    }
+    return message;
   }
 
   function setFormBusy(form, busy) {

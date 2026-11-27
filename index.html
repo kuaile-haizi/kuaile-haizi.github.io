@@ -16,6 +16,7 @@
   <title>代肝催工事务所 · 好感度+1</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="assets/contact.css">
+  <link rel="stylesheet" href="assets/wall.css">
 </head>
 <body>
   <!-- 背景层 -->
@@ -125,9 +126,59 @@
         </span>
         <span class="boss-cta-arrow" aria-hidden="true">→</span>
       </a>
+      <a class="contact-jump" href="#wall">⭐ 老板留言墙 ↓</a>
       <a class="contact-jump" href="#contact">💬 联系店主 / 微信付款 ↓</a>
     </div>
   </main>
+
+  <!-- 老板留言墙 -->
+  <section class="wall" id="wall">
+    <div class="wall-inner">
+      <div class="wall-head">
+        <p class="wall-eyebrow">BOSS WALL · 老板留言墙</p>
+        <h2>老板们怎么说</h2>
+        <p class="wall-sub">这里只展示老板自己设置的公开昵称、留言和评分；邮箱、游戏账号、联系方式不会公开。</p>
+      </div>
+      <div class="wall-body">
+        <div class="wall-feed" id="wallFeed" aria-live="polite">
+          <p class="wall-loading">正在加载留言…</p>
+        </div>
+        <div class="wall-side">
+          <form class="wall-form" id="wallForm" hidden>
+            <h3>写一条留言 / 评价</h3>
+            <label class="wall-field">
+              <span>公开昵称 <b>*</b></span>
+              <input id="wallName" type="text" maxlength="20" autocomplete="nickname" placeholder="例如：黑猫警长">
+            </label>
+            <label class="wall-field">
+              <span>留言内容 <b>*</b></span>
+              <textarea id="wallContent" rows="3" maxlength="300" placeholder="说说这次代肝体验…"></textarea>
+            </label>
+            <div class="wall-rating">
+              <span>评分（可选）</span>
+              <div class="wall-stars" id="wallStars" role="group" aria-label="评分">
+                <button type="button" data-star="1" aria-label="1 星">★</button>
+                <button type="button" data-star="2" aria-label="2 星">★</button>
+                <button type="button" data-star="3" aria-label="3 星">★</button>
+                <button type="button" data-star="4" aria-label="4 星">★</button>
+                <button type="button" data-star="5" aria-label="5 星">★</button>
+              </div>
+            </div>
+            <button class="wall-submit" id="wallSubmit" type="submit">发布到留言墙</button>
+            <p class="wall-msg" id="wallMsg" role="status"></p>
+            <p class="wall-note">公开昵称和留言会展示给所有访客；请不要在留言里写邮箱、账号或联系方式。</p>
+          </form>
+          <div class="wall-login" id="wallLoggedOut" hidden>
+            <p>老板登录后可以留言 / 评价。</p>
+            <a href="messages.html">去留言板登录 →</a>
+          </div>
+          <div class="wall-login" id="wallOwnerNote" hidden>
+            <p class="wall-owner-note">店主账号不参与老板留言墙；你可以在店主后台管理留言。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <!-- 联系店主 / 微信经营收款码 -->
   <footer class="contact" id="contact">
@@ -181,5 +232,6 @@
   <script src="vendor/supabase.js"></script>
   <script src="assets/supabase-config.js"></script>
   <script src="assets/urge-tracker.js"></script>
+  <script src="assets/wall.js"></script>
 </body>
 </html>
