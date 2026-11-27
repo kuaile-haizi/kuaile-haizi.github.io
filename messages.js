@@ -475,6 +475,19 @@
     els.resetMsg.className = 'form-msg' + (type ? ' is-' + type : '');
   }
 
+  async function notifyOwner(requestId) {
+    try {
+      var res = await sb.functions.invoke('notify-owner', {
+        body: { requestId: Number(requestId) }
+      });
+      if (res.error) throw res.error;
+      return !!(res.data && res.data.ok);
+    } catch (err) {
+      console.warn('店主邮件通知发送失败', err);
+      return false;
+    }
+  }
+
   async function notifyBoss(requestId) {
     try {
       var res = await sb.functions.invoke('notify-boss', {
@@ -863,14 +876,20 @@
         deadline: deadline || null,
         note: note,
         image_path: imagePath
-      });
+      }).select('id').single();
 
       if (res.error) throw res.error;
+
+      var newRequestId = res.data ? res.data.id : null;
+      var ownerNotified = newRequestId ? await notifyOwner(newRequestId) : false;
 
       setRequestMessage('提交成功，等店主审核。', 'ok');
       form.reset();
       setImageHint('');
-      toast(imageFile ? '需求已提交（含截图），等店主审核。' : '需求已提交，等店主审核。');
+      toast(
+        (imageFile ? '需求已提交（含截图），等店主审核。' : '需求已提交，等店主审核。') +
+        (ownerNotified ? ' 已邮件通知店主。' : '')
+      );
       await loadBossRequests(false);
     } catch (err) {
       console.error(err);
