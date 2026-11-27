@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0612">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="老板代肝需求留言板：登记游戏、账号、昵称和需求，店主处理后可查看进度。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 29'%3E%3Cpath fill='%23ff2d6f' d='M16 28S2 18 2 9.5C2 4.8 5.8 1 10.5 1c2.6 0 4.6 1.2 5.5 2.6C16.9 2.2 18.9 1 21.5 1 26.2 1 30 4.8 30 9.5 30 18 16 28 16 28Z'/%3E%3C/svg%3E">
+  <title>老板留言 · 代肝催工事务所</title>
+  <link rel="stylesheet" href="messages.css">
+</head>
+<body>
+  <div class="bg" aria-hidden="true">
+    <div class="bg-grid"></div>
+    <div class="bg-glow g1"></div>
+    <div class="bg-glow g2"></div>
+  </div>
+
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="nav-brand" href="index.html">
+        <span class="nav-mark">✦</span>
+        <span>代肝催工事务所</span>
+      </a>
+      <div class="nav-right">
+        <span class="nav-user" id="navUser" hidden></span>
+        <button class="btn btn-ghost btn-sm" id="logoutBtn" type="button" hidden>退出登录</button>
+        <a class="btn btn-ghost btn-sm" href="index.html">返回首页</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <!-- 载入中 -->
+    <section class="panel state-panel" id="loadingView">
+      <span class="spinner" aria-hidden="true"></span>
+      <p>正在连接留言服务…</p>
+    </section>
+
+    <!-- 未登录 -->
+    <section class="auth-layout" id="authView" hidden>
+      <div class="auth-intro">
+        <p class="eyebrow">BOSS MESSAGE BOARD</p>
+        <h1>老板，<br>把需求留在这里。</h1>
+        <p class="lead">
+          登记你要代肝的游戏、账号和昵称，店主登录后就能看到。<br>
+          账号和联系方式只有店主可见，处理进度会同步显示。
+        </p>
+        <ul class="feature-list">
+          <li><span>01</span> 老板邮箱+密码注册，随时查看进度</li>
+          <li><span>02</span> 需求提交后等待店主接受 / 驳回</li>
+          <li><span>03</span> 完成后店主会标记并留言通知</li>
+        </ul>
+      </div>
+
+      <div class="panel auth-panel">
+        <div class="tabs" role="tablist">
+          <button class="tab is-active" type="button" data-tab="login">登录</button>
+          <button class="tab" type="button" data-tab="signup">注册</button>
+        </div>
+
+        <form class="form" id="loginForm" novalidate>
+          <label class="field">
+            <span>邮箱</span>
+            <input type="email" name="email" autocomplete="email" placeholder="you@example.com" required>
+          </label>
+          <label class="field">
+            <span>密码</span>
+            <input type="password" name="password" autocomplete="current-password" placeholder="至少 6 位" required>
+          </label>
+          <button class="btn btn-primary" type="submit">登录</button>
+          <p class="form-hint">店主账号也用这里登录，登录后会自动进入后台。</p>
+        </form>
+
+        <form class="form" id="signupForm" hidden novalidate>
+          <label class="field">
+            <span>老板昵称</span>
+            <input type="text" name="display_name" maxlength="24" autocomplete="nickname" placeholder="例如：小王" required>
+          </label>
+          <label class="field">
+            <span>邮箱</span>
+            <input type="email" name="email" autocomplete="email" placeholder="用于登录，不会公开" required>
+          </label>
+          <label class="field">
+            <span>密码</span>
+            <input type="password" name="password" autocomplete="new-password" placeholder="至少 6 位" required>
+          </label>
+          <label class="field">
+            <span>确认密码</span>
+            <input type="password" name="confirm" autocomplete="new-password" placeholder="再输一次" required>
+          </label>
+          <button class="btn btn-primary" type="submit">注册账号</button>
+          <p class="form-hint">注册后即可提交需求；账号仅用于本留言板。</p>
+        </form>
+
+        <p class="form-msg" id="authMsg" role="status"></p>
+      </div>
+    </section>
+
+    <!-- 老板视图 -->
+    <section id="bossView" hidden>
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">BOSS CONSOLE</p>
+          <h1>老板留言板</h1>
+          <p class="page-sub" id="bossWelcome"></p>
+        </div>
+        <button class="btn btn-ghost" id="bossRefresh" type="button">刷新</button>
+      </div>
+
+      <div class="boss-grid">
+        <div class="panel form-panel">
+          <h2>提交代肝需求</h2>
+          <p class="panel-sub">带 <span class="req">*</span> 的为必填；账号信息只有店主能看到。</p>
+          <form class="form" id="requestForm" novalidate>
+            <div class="field-row">
+              <label class="field">
+                <span>游戏名称 <span class="req">*</span></span>
+                <input type="text" name="game_name" maxlength="40" placeholder="王者荣耀 / 原神 / 三角洲" required>
+              </label>
+              <label class="field">
+                <span>游戏昵称 <span class="req">*</span></span>
+                <input type="text" name="game_nickname" maxlength="40" placeholder="游戏里显示的名字" required>
+              </label>
+            </div>
+            <label class="field">
+              <span>游戏账号 <span class="req">*</span></span>
+              <input type="text" name="game_account" maxlength="80" placeholder="登录用的账号 / 手机号 / UID" required>
+            </label>
+            <label class="field">
+              <span>代肝需求 / 目标</span>
+              <textarea name="demand" rows="3" maxlength="500" placeholder="例如：上王者、刷满体力、打完活动、指定段位…"></textarea>
+            </label>
+            <div class="field-row">
+              <label class="field">
+                <span>联系方式</span>
+                <input type="text" name="contact" maxlength="80" placeholder="微信 / QQ">
+              </label>
+              <label class="field">
+                <span>截止时间</span>
+                <input type="date" name="deadline">
+              </label>
+            </div>
+            <label class="field">
+              <span>备注 / 截图说明</span>
+              <textarea name="note" rows="2" maxlength="500" placeholder="区服、段位、预算或其它说明；截图可以稍后发店主"></textarea>
+            </label>
+            <button class="btn btn-primary" type="submit">提交需求</button>
+            <p class="form-msg" id="requestMsg" role="status"></p>
+          </form>
+        </div>
+
+        <div class="panel list-panel">
+          <div class="list-head">
+            <h2>我的需求</h2>
+            <span class="count" id="myCount">0 条</span>
+          </div>
+          <div class="request-list" id="myList">
+            <p class="empty">还没有提交过需求。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 店主后台 -->
+    <section id="ownerView" hidden>
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">OWNER DASHBOARD</p>
+          <h1>店主后台</h1>
+          <p class="page-sub" id="ownerWelcome"></p>
+        </div>
+        <button class="btn btn-ghost" id="ownerRefresh" type="button">刷新</button>
+      </div>
+
+      <div class="admin-bar">
+        <div class="filters" id="filters">
+          <button class="filter is-active" type="button" data-filter="all">全部 <span id="countAll">0</span></button>
+          <button class="filter" type="button" data-filter="pending">待审核 <span id="countPending">0</span></button>
+          <button class="filter" type="button" data-filter="accepted">已接受 <span id="countAccepted">0</span></button>
+          <button class="filter" type="button" data-filter="rejected">已驳回 <span id="countRejected">0</span></button>
+          <button class="filter" type="button" data-filter="completed">已完成 <span id="countCompleted">0</span></button>
+        </div>
+      </div>
+
+      <div class="request-list admin-list" id="adminList">
+        <p class="empty">还没有老板留言。</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="vendor/supabase.js"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="messages.js"></script>
+</body>
+</html>

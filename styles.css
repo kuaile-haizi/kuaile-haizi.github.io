@@ -717,6 +717,34 @@ body {
   color: rgba(185, 168, 214, 0.75);
 }
 
+.boss-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 2px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+}
+
+.boss-link:hover {
+  color: #fff;
+  border-color: rgba(255, 209, 102, 0.5);
+  background: rgba(255, 209, 102, 0.08);
+  transform: translateY(-1px);
+}
+
+.boss-link-arrow {
+  color: var(--gold);
+  font-weight: 800;
+}
+
 /* ============ Toast ============ */
 
 .toast {
