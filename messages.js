@@ -73,6 +73,7 @@
   sb = window.supabase.createClient(cfg.url, cfg.anonKey);
 
   var PAGE_SIZE = 8;
+  var MAX_RESULT_IMAGES = 3;
 
   var state = {
     user: null,
@@ -81,6 +82,8 @@
     filter: 'all',
     requests: [],
     reviews: [],
+    requestImages: [],
+    imagesAvailable: true,
     urges: [],
     urgeStats: null,
     bossAccounts: [],
@@ -91,6 +94,7 @@
     resetUserId: null,
     autoTimer: 0,
     autoBusy: false,
+    manualBusy: false,
     busy: false
   };
 
@@ -198,6 +202,8 @@
     state.currentUserId = null;
     state.requests = [];
     state.reviews = [];
+    state.requestImages = [];
+    state.imagesAvailable = true;
     state.urges = [];
     state.urgeStats = null;
     state.bossAccounts = [];
@@ -207,6 +213,8 @@
     state.ownerVisible = PAGE_SIZE;
     window.clearInterval(state.autoTimer);
     state.autoTimer = 0;
+    state.autoBusy = false;
+    state.manualBusy = false;
     document.title = '老板留言 · 代肝催工事务所';
     showAuth();
     els.navUser.hidden = true;
@@ -283,7 +291,10 @@
       var changed = diffRequests(state.requests, next);
       state.requests = next;
       state.reviews = results[1].error ? [] : (results[1].data || []);
-      await attachImages(state.requests);
+      await Promise.all([
+        attachImages(state.requests),
+        loadRequestImages(state.requests)
+      ]);
       state.bossLoaded = true;
       state.bossVisible = Math.max(PAGE_SIZE, state.bossVisible);
       renderBossRequests();
@@ -331,7 +342,7 @@
             (item.note ? reqField('备注', item.note, true) : '') +
           '</div>' +
           note +
-          imageBlock(item) +
+          shotsBlock(item, false) +
           review +
           '<div class="req-footer"><span>' + escapeHtml(meta.hint) + '</span></div>' +
         '</article>'
@@ -408,7 +419,10 @@
         item.boss = profileMap[item.boss_id] || null;
         return item;
       });
-      await attachImages(state.requests);
+      await Promise.all([
+        attachImages(state.requests),
+        loadRequestImages(state.requests)
+      ]);
       state.ownerLoaded = true;
       state.ownerVisible = Math.max(PAGE_SIZE, state.ownerVisible);
 
@@ -826,7 +840,7 @@
             (item.note ? reqField('备注', item.note, true) : '') +
           '</div>' +
           note +
-          imageBlock(item) +
+          shotsBlock(item, true) +
           actions +
           reviewHtml +
           '<div class="req-footer">' +
@@ -850,13 +864,39 @@
     var ids = items.map(function (item) { return Number(item.id); });
     var paths = items.map(function (item) { return item.image_path; }).filter(Boolean);
 
+    // 先把完成截图的路径收集起来；删除需求后 request_images 会级联删除
+    try {
+      var imgRes = await sb
+        .from('request_images')
+        .select('storage_path')
+        .in('request_id', ids);
+      if (imgRes.error) {
+        console.warn('读取完成截图路径失败', imgRes.error);
+      } else {
+        (imgRes.data || []).forEach(function (row) {
+          if (row.storage_path) paths.push(row.storage_path);
+        });
+      }
+    } catch (err) {
+      console.warn('读取完成截图路径失败', err);
+    }
+
     var res = await sb.from('requests').delete().in('id', ids);
     if (res.error) throw res.error;
 
-    if (paths.length) {
+    var uniquePaths = paths.filter(function (path, index) {
+      return paths.indexOf(path) === index;
+    });
+
+    if (uniquePaths.length) {
       try {
-        var storageRes = await sb.storage.from('request-images').remove(paths);
-        if (storageRes.error) console.warn('删除截图失败', storageRes.error);
+        // Storage remove 一次别传太多，分批清理
+        for (var i = 0; i < uniquePaths.length; i += 50) {
+          var storageRes = await sb.storage
+            .from('request-images')
+            .remove(uniquePaths.slice(i, i + 50));
+          if (storageRes.error) console.warn('删除截图失败', storageRes.error);
+        }
       } catch (err) {
         console.warn('删除截图失败', err);
       }
@@ -989,7 +1029,7 @@
   function startAutoRefresh() {
     window.clearInterval(state.autoTimer);
     state.autoTimer = window.setInterval(function () {
-      if (!state.user || document.hidden || state.autoBusy) return;
+      if (!state.user || document.hidden || state.autoBusy || state.manualBusy) return;
 
       if (!els.ownerView.hidden) {
         if (hasFocusInside(els.ownerView)) return;
@@ -1006,7 +1046,7 @@
   }
 
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden || !state.user || state.autoBusy) return;
+    if (document.hidden || !state.user || state.autoBusy || state.manualBusy) return;
     if (!els.ownerView.hidden && !hasFocusInside(els.ownerView)) {
       loadOwnerRequests(true).then(function () { return loadOwnerStats(); });
     } else if (!els.bossView.hidden && !hasFocusInside(els.myList)) {
@@ -1015,6 +1055,38 @@
   });
 
   els.adminList.addEventListener('click', async function (event) {
+    var removeResultBtn = event.target.closest('button[data-remove-result]');
+    if (removeResultBtn) {
+      if (!window.confirm('删除这张完成截图吗？老板将看不到它。')) return;
+      removeResultBtn.disabled = true;
+      try {
+        await removeResultImage(removeResultBtn.getAttribute('data-remove-result'));
+      } catch (err) {
+        console.error(err);
+        toast('删除完成截图失败：' + friendlyError(err), true);
+        removeResultBtn.disabled = false;
+      }
+      return;
+    }
+
+    var uploadResultBtn = event.target.closest('button[data-upload-result]');
+    if (uploadResultBtn) {
+      var uploadBlock = uploadResultBtn.closest('[data-upload-request]');
+      if (!uploadBlock || uploadBlock.getAttribute('data-uploading') === '1') return;
+      var uploadRequestId = uploadBlock.getAttribute('data-upload-request');
+      var fileInput = uploadBlock.querySelector('[data-result-input]');
+      var files = fileInput && fileInput.files
+        ? Array.prototype.slice.call(fileInput.files)
+        : [];
+      if (!files.length) {
+        toast('先选择要上传的图片。', true);
+        if (fileInput) fileInput.click();
+        return;
+      }
+      await uploadResultImages(uploadRequestId, files, uploadBlock);
+      return;
+    }
+
     var deleteBtn = event.target.closest('button[data-delete]');
     if (deleteBtn) {
       var deleteCard = deleteBtn.closest('.req-card');
@@ -1055,7 +1127,7 @@
     }
 
     if (action === 'reject' && !window.confirm('确定驳回这条需求吗？驳回原因会发给老板。')) return;
-    if (action === 'complete' && !window.confirm('确定把这条需求标记为「已完成」吗？')) return;
+    if (action === 'complete' && !window.confirm('确定把这条需求标记为「已完成」吗？\n记得在卡片里上传完成截图，老板能看到。')) return;
 
     setCardBusy(card, true);
 
@@ -1088,6 +1160,30 @@
       toast('操作失败：' + friendlyError(err), true);
       setCardBusy(card, false);
     }
+  });
+
+  els.adminList.addEventListener('change', function (event) {
+    var input = event.target.closest('[data-result-input]');
+    if (!input) return;
+    var block = input.closest('[data-upload-request]');
+    var hint = block ? block.querySelector('[data-result-hint]') : null;
+    if (!hint) return;
+
+    var requestId = block.getAttribute('data-upload-request');
+    var remaining = Math.max(0, MAX_RESULT_IMAGES - resultImagesFor(requestId).length);
+    var files = input.files ? Array.prototype.slice.call(input.files) : [];
+
+    if (!files.length) {
+      hint.textContent = '还可选 ' + remaining + ' 张，自动压缩，上传后老板立刻能看到。';
+      return;
+    }
+
+    var totalMb = files.reduce(function (sum, file) {
+      return sum + (file.size || 0);
+    }, 0) / 1024 / 1024;
+
+    hint.textContent = '已选 ' + files.length + ' 张（' + totalMb.toFixed(1) + 'MB），点「上传完成截图」开始上传。' +
+      (files.length > remaining ? ' 每单最多 ' + MAX_RESULT_IMAGES + ' 张，只会传前 ' + remaining + ' 张。' : '');
   });
 
   /* ============================================================
@@ -1202,16 +1298,254 @@
     return '★★★★★'.slice(0, value) + '☆☆☆☆☆'.slice(0, 5 - value);
   }
 
-  function imageBlock(item) {
-    if (!item.imageUrl) return '';
-    var url = escapeHtml(item.imageUrl);
+  function resultImagesFor(requestId) {
+    return state.requestImages.filter(function (row) {
+      return Number(row.request_id) === Number(requestId);
+    });
+  }
+
+  function shotFigure(url, alt) {
     return (
-      '<div class="req-image">' +
-        '<a href="' + url + '" target="_blank" rel="noreferrer">' +
-          '<img src="' + url + '" alt="老板上传的需求截图" loading="lazy">' +
+      '<figure class="shot">' +
+        '<a href="' + escapeHtml(url) + '" target="_blank" rel="noreferrer">' +
+          '<img src="' + escapeHtml(url) + '" alt="' + escapeHtml(alt) + '" loading="lazy">' +
         '</a>' +
+      '</figure>'
+    );
+  }
+
+  function shotsBlock(item, isOwner) {
+    var results = resultImagesFor(item.id);
+    var canManage = item.status === 'accepted' || item.status === 'completed';
+    var remaining = Math.max(0, MAX_RESULT_IMAGES - results.length);
+
+    var originalHtml = item.imageUrl
+      ? '<div class="shot-grid">' + shotFigure(item.imageUrl, '老板提交时上传的原始截图') + '</div>'
+      : '<p class="shot-empty">老板没有上传原始截图。</p>';
+
+    var resultHtml = results.length
+      ? '<div class="shot-grid">' + results.map(function (row) {
+          var figure = row.url
+            ? '<a href="' + escapeHtml(row.url) + '" target="_blank" rel="noreferrer">' +
+                '<img src="' + escapeHtml(row.url) + '" alt="店主上传的完成截图" loading="lazy">' +
+              '</a>'
+            : '<div class="shot-broken">图片加载失败</div>';
+          return (
+            '<figure class="shot">' +
+              figure +
+              (isOwner
+                ? '<button class="shot-del" type="button" data-remove-result="' +
+                    escapeHtml(String(row.id)) + '" title="删除这张完成截图">删除</button>'
+                : '') +
+            '</figure>'
+          );
+        }).join('') + '</div>'
+      : '<p class="shot-empty">' +
+          (isOwner ? '还没有完成截图，上传后老板就能看到。' : '店主还没有上传完成截图。') +
+        '</p>';
+
+    var showResultGroup = state.imagesAvailable && (results.length > 0 || canManage);
+
+    var uploadHtml = '';
+    if (isOwner && canManage) {
+      var full = remaining === 0;
+      uploadHtml =
+        '<div class="result-upload" data-upload-request="' + escapeHtml(String(item.id)) + '" data-uploading="0">' +
+          '<input class="file-input" type="file" accept="image/png,image/jpeg,image/webp" multiple data-result-input' +
+            (full ? ' disabled' : '') + '>' +
+          '<button class="btn btn-sm btn-blue" type="button" data-upload-result' + (full ? ' disabled' : '') + '>' +
+            (full ? '已满 ' + MAX_RESULT_IMAGES + ' 张' : '上传完成截图') +
+          '</button>' +
+          '<p class="form-hint" data-result-hint>' +
+            (full
+              ? '每单最多 ' + MAX_RESULT_IMAGES + ' 张，删掉一张后可再传。'
+              : '还可选 ' + remaining + ' 张，自动压缩，上传后老板立刻能看到。') +
+          '</p>' +
+          '<p class="form-msg" data-result-msg role="status"></p>' +
+        '</div>';
+    }
+
+    return (
+      '<div class="shots">' +
+        '<div class="shot-group">' +
+          '<div class="shot-title"><span>原始截图</span><em>老板提交时上传</em></div>' +
+          originalHtml +
+        '</div>' +
+        (showResultGroup
+          ? '<div class="shot-group">' +
+              '<div class="shot-title"><span>完成截图</span><em>' +
+                (isOwner
+                  ? '已上传 ' + results.length + ' / ' + MAX_RESULT_IMAGES
+                  : '店主上传 ' + results.length + ' 张') +
+              '</em></div>' +
+              resultHtml +
+              uploadHtml +
+            '</div>'
+          : '') +
       '</div>'
     );
+  }
+
+  async function loadRequestImages(requests) {
+    var ids = (requests || [])
+      .map(function (item) { return Number(item.id); })
+      .filter(function (id) { return id > 0; });
+    state.requestImages = [];
+    if (!ids.length) return;
+
+    try {
+      var res = await sb
+        .from('request_images')
+        .select('*')
+        .in('request_id', ids)
+        .order('created_at', { ascending: true });
+      if (res.error) throw res.error;
+
+      var rows = res.data || [];
+      await Promise.all(rows.map(async function (row) {
+        row.url = '';
+        if (!row.storage_path) return;
+        try {
+          var signed = await sb.storage
+            .from('request-images')
+            .createSignedUrl(row.storage_path, 3600);
+          if (!signed.error && signed.data && signed.data.signedUrl) {
+            row.url = signed.data.signedUrl;
+          }
+        } catch (err) {
+          console.warn('生成完成截图链接失败', err);
+        }
+      }));
+      state.requestImages = rows;
+      state.imagesAvailable = true;
+    } catch (err) {
+      console.warn('读取完成截图失败', err);
+      state.requestImages = [];
+      state.imagesAvailable = false;
+    }
+  }
+
+  async function uploadResultImages(requestId, files, block) {
+    var request = state.requests.find(function (item) {
+      return String(item.id) === String(requestId);
+    });
+    if (!request) return;
+    if (request.status !== 'accepted' && request.status !== 'completed') {
+      toast('只有已接受 / 已完成的需求才能上传完成截图。', true);
+      return;
+    }
+
+    var existing = resultImagesFor(requestId).length;
+    var remaining = MAX_RESULT_IMAGES - existing;
+    if (remaining <= 0) {
+      toast('每单最多 ' + MAX_RESULT_IMAGES + ' 张，先删掉一张再传。', true);
+      return;
+    }
+
+    var chosen = files.slice(0, remaining);
+    if (files.length > remaining) {
+      toast('每单最多 ' + MAX_RESULT_IMAGES + ' 张，这次只上传前 ' + remaining + ' 张。', true);
+    }
+
+    var button = block.querySelector('[data-upload-result]');
+    var input = block.querySelector('[data-result-input]');
+    var hint = block.querySelector('[data-result-hint]');
+    var msg = block.querySelector('[data-result-msg]');
+    var buttonLabel = button ? button.textContent : '';
+    var hintLabel = hint ? hint.textContent : '';
+    var uploadedPaths = [];
+
+    function setBusy(busy, text) {
+      block.setAttribute('data-uploading', busy ? '1' : '0');
+      if (button) {
+        button.disabled = busy;
+        button.textContent = busy ? text : buttonLabel;
+      }
+      if (input) input.disabled = busy;
+      if (hint) hint.textContent = busy ? text : hintLabel;
+    }
+
+    state.manualBusy = true;
+    setBusy(true, '上传中…');
+
+    try {
+      // 先全部压缩，再统一上传
+      var blobs = [];
+      for (var i = 0; i < chosen.length; i += 1) {
+        if (msg) {
+          msg.className = 'form-msg';
+          msg.textContent = '处理图片 ' + (i + 1) + ' / ' + chosen.length + '…';
+        }
+        var file = chosen[i];
+        if (!file || !file.size) throw new Error('有一张图片是空的，换一张试试。');
+        if (file.size > 10 * 1024 * 1024) throw new Error(file.name + ' 超过 10MB。');
+        blobs.push(await compressImage(file));
+      }
+
+      // 上传到店主自己的 Storage 目录
+      for (var j = 0; j < blobs.length; j += 1) {
+        if (msg) msg.textContent = '上传 ' + (j + 1) + ' / ' + blobs.length + '…';
+        var path = state.user.id + '/result/' + requestId + '-' + randomName() + '.jpg';
+        var up = await sb.storage.from('request-images').upload(path, blobs[j], {
+          contentType: 'image/jpeg',
+          upsert: false
+        });
+        if (up.error) throw up.error;
+        uploadedPaths.push(path);
+      }
+
+      var rows = uploadedPaths.map(function (path) {
+        return {
+          request_id: Number(requestId),
+          uploader_id: state.user.id,
+          storage_path: path,
+          kind: 'result'
+        };
+      });
+
+      var ins = await sb.from('request_images').insert(rows);
+      if (ins.error) throw ins.error;
+
+      toast('已上传 ' + uploadedPaths.length + ' 张完成截图，老板刷新就能看到。');
+      await loadOwnerRequests();
+    } catch (err) {
+      console.error(err);
+      if (uploadedPaths.length) {
+        try {
+          await sb.storage.from('request-images').remove(uploadedPaths);
+        } catch (e) {
+          console.warn('清理上传失败的完成截图失败', e);
+        }
+      }
+      if (msg) {
+        msg.className = 'form-msg is-error';
+        msg.textContent = '上传失败：' + friendlyError(err);
+      }
+      if (input) input.value = '';
+    } finally {
+      state.manualBusy = false;
+      setBusy(false, '上传中…');
+    }
+  }
+
+  async function removeResultImage(imageId) {
+    var row = state.requestImages.find(function (item) {
+      return String(item.id) === String(imageId);
+    });
+    if (!row) return;
+
+    var res = await sb.from('request_images').delete().eq('id', row.id);
+    if (res.error) throw res.error;
+
+    try {
+      var removed = await sb.storage.from('request-images').remove([row.storage_path]);
+      if (removed.error) console.warn('删除完成截图文件失败', removed.error);
+    } catch (err) {
+      console.warn('删除完成截图文件失败', err);
+    }
+
+    toast('已删除完成截图。');
+    await loadOwnerRequests();
   }
 
   async function attachImages(list) {
@@ -1288,16 +1622,19 @@
     });
   }
 
+  function randomName() {
+    return (window.crypto && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : String(Date.now()) + '-' + Math.random().toString(16).slice(2);
+  }
+
   async function uploadScreenshot(file) {
     if (!file) return '';
     if (file.size > 10 * 1024 * 1024) {
       throw new Error('截图不能超过 10MB');
     }
     var blob = await compressImage(file);
-    var random = (window.crypto && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : String(Date.now()) + '-' + Math.random().toString(16).slice(2);
-    var path = state.user.id + '/' + random + '.jpg';
+    var path = state.user.id + '/' + randomName() + '.jpg';
     var res = await sb.storage.from('request-images').upload(path, blob, {
       contentType: 'image/jpeg',
       upsert: false

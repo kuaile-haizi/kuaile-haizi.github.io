@@ -388,15 +388,133 @@ h2 {
   margin-top: 14px;
 }
 
-.req-image { margin-top: 10px; }
+/* 原始截图 / 完成截图 */
+.shots {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 10px 0 12px;
+}
 
-.req-image img {
-  display: block;
-  width: min(100%, 380px);
-  max-height: 260px;
-  object-fit: cover;
+.shot-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.shot-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.shot-title span {
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.shot-title em {
+  font-style: normal;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: rgba(185, 168, 214, 0.55);
+}
+
+.shot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  gap: 8px;
+}
+
+.shot {
+  position: relative;
+  margin: 0;
+  aspect-ratio: 4 / 3;
   border-radius: 10px;
+  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 4, 16, 0.5);
+}
+
+.shot a {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.shot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.2s ease;
+}
+
+.shot a:hover img { transform: scale(1.04); }
+
+.shot-del {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 92, 122, 0.5);
+  border-radius: 7px;
+  background: rgba(10, 6, 18, 0.82);
+  color: #ffb3c9;
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.shot-del:hover {
+  background: rgba(255, 45, 111, 0.9);
+  color: #fff;
+}
+
+.shot-broken {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.shot-empty {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  color: rgba(185, 168, 214, 0.55);
+  font-size: 11.5px;
+}
+
+.result-upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px dashed rgba(110, 168, 255, 0.28);
+  background: rgba(110, 168, 255, 0.05);
+}
+
+.result-upload .file-input {
+  flex: 1 1 160px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.result-upload .form-hint,
+.result-upload .form-msg {
+  width: 100%;
 }
 
 .review-box {
