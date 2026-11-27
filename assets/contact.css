@@ -3,6 +3,8 @@
    首页与老板留言板共用
    ============================================================ */
 
+[hidden] { display: none !important; }
+
 .contact {
   position: relative;
   z-index: 5;
@@ -164,8 +166,87 @@ a.contact-value:hover {
   flex-direction: column;
   align-items: center;
   gap: 10px;
+  width: 100%;
   margin: 0;
   text-align: center;
+}
+
+.pay-details {
+  width: 100%;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 4, 16, 0.4);
+}
+
+.pay-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 13px;
+  color: var(--gold, #ffd166);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  list-style: none;
+}
+
+.pay-summary::-webkit-details-marker {
+  display: none;
+}
+
+.pay-summary::after {
+  content: "查看";
+  flex: none;
+  color: rgba(185, 168, 214, 0.7);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.pay-details[open] .pay-summary::after {
+  content: "收起";
+}
+
+.pay-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+
+.pay-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 209, 102, 0.16);
+  background: rgba(255, 209, 102, 0.04);
+  text-align: left;
+}
+
+.pay-consent input {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+  accent-color: #ff2d6f;
+  cursor: pointer;
+}
+
+.pay-consent label {
+  color: rgba(185, 168, 214, 0.82);
+  font-size: 10.5px;
+  line-height: 1.65;
+  cursor: pointer;
+}
+
+.pay-consent a {
+  color: var(--gold, #ffd166);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .pay-qr {
@@ -174,6 +255,7 @@ a.contact-value:hover {
   place-items: center;
   width: min(100%, 260px);
   aspect-ratio: 1 / 1;
+  margin: 0 auto;
   padding: 10px;
   overflow: hidden;
   border-radius: 16px;
@@ -216,14 +298,14 @@ a.contact-value:hover {
   display: grid;
 }
 
-.pay-card figcaption b {
+.pay-caption b {
   display: block;
   font-size: 12px;
   letter-spacing: 0.06em;
   color: var(--gold, #ffd166);
 }
 
-.pay-card figcaption small {
+.pay-caption small {
   display: block;
   margin-top: 3px;
   font-size: 10.5px;
@@ -244,21 +326,22 @@ a.contact-value:hover {
   }
 
   .pay-card {
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 14px;
+    flex-direction: column;
+    align-items: stretch;
     text-align: left;
   }
 
+  .pay-caption {
+    text-align: center;
+  }
+
   .pay-qr {
-    flex: none;
     width: 200px;
     padding: 8px;
     border-radius: 13px;
   }
 
-  .pay-card figcaption b {
+  .pay-caption b {
     font-size: 12.5px;
   }
 }
@@ -266,11 +349,6 @@ a.contact-value:hover {
 @media (max-width: 420px) {
   .contact-label {
     width: 100%;
-  }
-
-  .pay-card {
-    flex-direction: column;
-    text-align: center;
   }
 
   .pay-qr {

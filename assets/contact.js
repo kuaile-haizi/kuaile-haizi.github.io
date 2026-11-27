@@ -27,6 +27,23 @@
     $$('.pay-img').forEach(checkQr);
   });
 
+  function syncPayGate() {
+    $$('[data-pay-agree]').forEach(function (checkbox) {
+      var panel = checkbox.closest('.pay-panel');
+      var qr = panel ? panel.querySelector('.pay-qr') : null;
+      if (qr) qr.hidden = !checkbox.checked;
+    });
+  }
+
+  syncPayGate();
+  window.addEventListener('pageshow', syncPayGate);
+
+  document.addEventListener('change', function (event) {
+    var checkbox = event.target.closest('[data-pay-agree]');
+    if (!checkbox) return;
+    syncPayGate();
+  });
+
   function legacyCopy(text) {
     return new Promise(function (resolve, reject) {
       var area = document.createElement('textarea');
