@@ -1168,6 +1168,103 @@ h2 {
   font-weight: 700;
 }
 
+/* 每个老板的催更次数 */
+.boss-urge-block {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.boss-urge-block .list-head {
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+
+.boss-urge-block .list-head h3 { margin: 0; }
+
+.boss-urge-block .count { font-size: 10.5px; }
+
+.boss-urge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.boss-urge-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.boss-urge-main {
+  flex: 1 1 170px;
+  min-width: 0;
+}
+
+.boss-urge-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.boss-urge-mail {
+  margin-top: 1px;
+  font-size: 10.5px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.boss-urge-last {
+  margin-top: 3px;
+  font-size: 10px;
+  color: rgba(185, 168, 214, 0.5);
+}
+
+.boss-urge-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 10px;
+  margin-left: auto;
+}
+
+.boss-urge-count {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+.boss-urge-count small {
+  margin-left: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.boss-urge-state {
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.boss-urge-state.is-wait { color: var(--gold); }
+.boss-urge-state.is-sent { color: var(--mint); }
+.boss-urge-state.is-zero { color: rgba(185, 168, 214, 0.45); }
+
+.boss-urge-row .btn {
+  flex: none;
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
 .admin-bar {
   display: flex;
   align-items: center;
@@ -1360,6 +1457,8 @@ h2 {
   .stat-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stat-card .stat-v { font-size: 19px; }
   .cleanup-tip { width: 100%; margin-left: 0; }
+  .boss-urge-row { align-items: flex-start; }
+  .boss-urge-meta { width: 100%; margin-left: 0; justify-content: flex-start; }
 }
 
 @media (prefers-reduced-motion: reduce) {

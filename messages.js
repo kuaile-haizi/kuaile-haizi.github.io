@@ -41,6 +41,8 @@
     statCards: $('#statCards'),
     urgeChart: $('#urgeChart'),
     gameStats: $('#gameStats'),
+    bossUrgeList: $('#bossUrgeList'),
+    bossUrgeHint: $('#bossUrgeHint'),
     statsUpdated: $('#statsUpdated'),
     exportCsv: $('#exportCsv'),
     bossAccounts: $('#bossAccounts'),
@@ -74,6 +76,7 @@
 
   var PAGE_SIZE = 8;
   var MAX_RESULT_IMAGES = 3;
+  var URGE_MILESTONE = 30;
 
   var state = {
     user: null,
@@ -86,6 +89,8 @@
     imagesAvailable: true,
     urges: [],
     urgeStats: null,
+    bossUrgeStats: [],
+    bossUrgeStatsReady: true,
     bossAccounts: [],
     bossVisible: PAGE_SIZE,
     ownerVisible: PAGE_SIZE,
@@ -206,6 +211,8 @@
     state.imagesAvailable = true;
     state.urges = [];
     state.urgeStats = null;
+    state.bossUrgeStats = [];
+    state.bossUrgeStatsReady = true;
     state.bossAccounts = [];
     state.ownerLoaded = false;
     state.bossLoaded = false;
@@ -482,14 +489,35 @@
 
   async function loadOwnerStats() {
     try {
-      var res = await sb.rpc('owner_urge_stats');
-      if (res.error) throw res.error;
-      state.urgeStats = res.data || null;
+      var results = await Promise.all([
+        sb.rpc('owner_urge_stats'),
+        sb.rpc('owner_boss_urge_stats')
+      ]);
+
+      if (results[0].error) {
+        console.warn('读取催更统计失败', results[0].error);
+        state.urgeStats = null;
+      } else {
+        state.urgeStats = results[0].data || null;
+      }
+
+      if (results[1].error) {
+        console.warn('读取老板催更明细失败', results[1].error);
+        state.bossUrgeStats = [];
+        state.bossUrgeStatsReady = false;
+      } else {
+        state.bossUrgeStats = Array.isArray(results[1].data) ? results[1].data : [];
+        state.bossUrgeStatsReady = true;
+      }
     } catch (err) {
       console.warn('读取催更统计失败', err);
       state.urgeStats = null;
+      state.bossUrgeStats = [];
+      state.bossUrgeStatsReady = false;
     }
+
     renderOwnerStats();
+    renderBossUrgeStats();
   }
 
   function localDayKey(date) {
@@ -578,6 +606,70 @@
     if (els.statsUpdated) {
       els.statsUpdated.textContent = '更新于 ' + now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
     }
+  }
+
+  function renderBossUrgeStats() {
+    if (!els.bossUrgeList) return;
+
+    if (!state.bossUrgeStatsReady) {
+      els.bossUrgeList.innerHTML = '<p class="empty">暂时读不到老板明细，请确认 migration-007 已运行。</p>';
+      return;
+    }
+
+    var rows = (state.bossUrgeStats || []).slice().sort(function (a, b) {
+      return (Number(b.total) || 0) - (Number(a.total) || 0);
+    });
+
+    if (!rows.length) {
+      els.bossUrgeList.innerHTML = '<p class="empty">还没有老板账号，或还没有人催过。</p>';
+      return;
+    }
+
+    els.bossUrgeList.innerHTML = rows.map(function (row) {
+      var total = Number(row.total) || 0;
+      var notified = !!row.notified_at;
+      var stateText;
+      var stateClass = '';
+
+      if (notified) {
+        stateText = '已发提醒';
+        stateClass = ' is-sent';
+      } else if (total >= URGE_MILESTONE) {
+        stateText = '待发提醒';
+        stateClass = ' is-wait';
+      } else if (total === 0) {
+        stateText = '还没催过';
+        stateClass = ' is-zero';
+      } else {
+        stateText = '还差 ' + (URGE_MILESTONE - total) + ' 次';
+      }
+
+      var name = row.display_name || row.email || '未命名老板';
+      var email = row.email || '';
+      var last = row.last_at ? '最后催更 ' + formatTime(row.last_at) : '还没有催更记录';
+      var button = (!notified && total >= URGE_MILESTONE)
+        ? '<button class="btn btn-sm btn-ghost" type="button" data-notify-boss="' +
+            escapeHtml(String(row.boss_id)) + '">发送提醒邮件</button>'
+        : '';
+
+      return (
+        '<div class="boss-urge-row">' +
+          '<div class="boss-urge-main">' +
+            '<div class="boss-urge-name">' + escapeHtml(name) + '</div>' +
+            (email ? '<div class="boss-urge-mail">' + escapeHtml(email) + '</div>' : '') +
+            '<div class="boss-urge-last">' + escapeHtml(last) + '</div>' +
+          '</div>' +
+          '<div class="boss-urge-meta">' +
+            '<span class="boss-urge-count">' + total + '<small>次</small></span>' +
+            '<span class="boss-urge-state' + stateClass + '"' +
+              (notified ? ' title="' + escapeHtml(formatTime(row.notified_at)) + '"' : '') + '>' +
+              escapeHtml(stateText) +
+            '</span>' +
+            button +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
   }
 
   function csvCell(value) {
@@ -702,6 +794,63 @@
       return '重置服务还没部署，请先在 Supabase 部署 admin-reset-password Edge Function。';
     }
     return message;
+  }
+
+  async function urgeFunctionErrorMessage(error) {
+    var message = (error && (error.message || error.error_description)) || '发送失败';
+    try {
+      if (error && error.context) {
+        var body = await error.context.clone().json();
+        if (body && body.error) message = body.error;
+      }
+    } catch (e) {}
+    if (/Failed to send a request to the Edge Function|Function not found|404/i.test(message)) {
+      return '提醒邮件服务还没部署，请先部署 notify-urge-milestone Edge Function。';
+    }
+    return message;
+  }
+
+  if (els.bossUrgeList) {
+    els.bossUrgeList.addEventListener('click', async function (event) {
+      var button = event.target.closest('button[data-notify-boss]');
+      if (!button) return;
+
+      var bossId = button.getAttribute('data-notify-boss');
+      var item = state.bossUrgeStats.find(function (row) {
+        return String(row.boss_id) === String(bossId);
+      });
+      var name = item ? (item.display_name || item.email || '这个老板') : '这个老板';
+
+      if (!window.confirm('给「' + name + '」发送催更提醒邮件吗？')) return;
+
+      var label = button.textContent;
+      button.disabled = true;
+      button.textContent = '发送中…';
+
+      try {
+        var res = await sb.functions.invoke('notify-urge-milestone', {
+          body: { bossId: bossId }
+        });
+        if (res.error) throw res.error;
+        if (res.data && res.data.error) throw new Error(res.data.error);
+
+        var notifyData = res.data || {};
+        if (notifyData.skipped) {
+          toast(notifyData.reason || '已经发过提醒。');
+        } else if (notifyData.ok) {
+          toast('催更提醒邮件已发送。');
+        } else {
+          toast(notifyData.reason || '发送失败，请稍后重试。', true);
+        }
+
+        await loadOwnerStats();
+      } catch (err) {
+        console.error(err);
+        toast('发送失败：' + (await urgeFunctionErrorMessage(err)), true);
+        button.disabled = false;
+        button.textContent = label;
+      }
+    });
   }
 
   els.bossAccounts.addEventListener('click', function (event) {
