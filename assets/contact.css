@@ -249,6 +249,39 @@ a.contact-value:hover {
   text-underline-offset: 2px;
 }
 
+.pay-agree-btn {
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #ff5c8a, #ff2d6f 55%, #e00f4d);
+  box-shadow: 0 8px 18px rgba(255, 45, 111, 0.22);
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: filter 0.2s ease, opacity 0.2s ease;
+}
+
+.pay-agree-btn:hover {
+  filter: brightness(1.06);
+}
+
+.pay-agree-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.pay-agree-btn.is-confirmed {
+  background: linear-gradient(180deg, #6ff0c7, #34d399);
+  box-shadow: 0 8px 18px rgba(52, 211, 153, 0.2);
+  color: #031a13;
+  opacity: 1;
+}
+
 .pay-qr {
   position: relative;
   display: grid;

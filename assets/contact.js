@@ -30,8 +30,37 @@
   function syncPayGate() {
     $$('[data-pay-agree]').forEach(function (checkbox) {
       var panel = checkbox.closest('.pay-panel');
-      var qr = panel ? panel.querySelector('.pay-qr') : null;
-      if (qr) qr.hidden = !checkbox.checked;
+      if (!panel) return;
+
+      var qr = panel.querySelector('.pay-qr');
+      var button = panel.querySelector('[data-pay-confirm]');
+      var confirmed = panel.getAttribute('data-pay-confirmed') === '1';
+
+      if (!checkbox.checked) {
+        panel.removeAttribute('data-pay-confirmed');
+        confirmed = false;
+        if (qr) qr.hidden = true;
+        if (button) {
+          button.disabled = true;
+          button.classList.remove('is-confirmed');
+          button.textContent = '同意并查看收款码';
+        }
+        return;
+      }
+
+      if (button && !confirmed) {
+        button.disabled = false;
+        button.classList.remove('is-confirmed');
+        button.textContent = '同意并查看收款码';
+      }
+
+      if (qr) qr.hidden = !confirmed;
+
+      if (button && confirmed) {
+        button.disabled = true;
+        button.classList.add('is-confirmed');
+        button.textContent = '已同意，收款码已显示';
+      }
     });
   }
 
@@ -41,6 +70,20 @@
   document.addEventListener('change', function (event) {
     var checkbox = event.target.closest('[data-pay-agree]');
     if (!checkbox) return;
+    syncPayGate();
+  });
+
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-pay-confirm]');
+    if (!button) return;
+
+    var panel = button.closest('.pay-panel');
+    if (!panel) return;
+
+    var checkbox = panel.querySelector('[data-pay-agree]');
+    if (!checkbox || !checkbox.checked) return;
+
+    panel.setAttribute('data-pay-confirmed', '1');
     syncPayGate();
   });
 
