@@ -475,6 +475,19 @@
     els.resetMsg.className = 'form-msg' + (type ? ' is-' + type : '');
   }
 
+  async function notifyBoss(requestId) {
+    try {
+      var res = await sb.functions.invoke('notify-boss', {
+        body: { requestId: Number(requestId) }
+      });
+      if (res.error) throw res.error;
+      return !!(res.data && res.data.ok);
+    } catch (err) {
+      console.warn('邮件通知发送失败', err);
+      return false;
+    }
+  }
+
   async function functionErrorMessage(error) {
     var message = (error && (error.message || error.error_description)) || '重置失败';
     try {
@@ -797,7 +810,8 @@
 
       if (res.error) throw res.error;
 
-      toast('已' + labels[nextStatus] + '，老板刷新页面就能看到。');
+      var mailSent = await notifyBoss(requestId);
+      toast('已' + labels[nextStatus] + '，老板刷新就能看到。' + (mailSent ? ' 邮件已通知老板。' : ''));
       await loadOwnerRequests();
     } catch (err) {
       console.error(err);
