@@ -359,6 +359,123 @@ h2 {
 
 .field textarea { resize: vertical; }
 
+.file-input {
+  padding: 10px 12px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.file-input::file-selector-button {
+  margin-right: 10px;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.file-input::file-selector-button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.load-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.req-image { margin-top: 10px; }
+
+.req-image img {
+  display: block;
+  width: min(100%, 380px);
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.review-box {
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 209, 102, 0.18);
+  background: rgba(255, 209, 102, 0.045);
+}
+
+.review-title {
+  margin-bottom: 8px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--gold);
+}
+
+.review-stars {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.review-stars button {
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.review-stars button:hover,
+.review-stars button.is-on {
+  color: var(--gold);
+  transform: translateY(-1px);
+}
+
+.review-text {
+  width: 100%;
+  min-height: 54px;
+  margin-bottom: 8px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 4, 16, 0.55);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  resize: vertical;
+}
+
+.review-view {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 209, 102, 0.16);
+  background: rgba(255, 209, 102, 0.05);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.review-view b {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--gold);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+.review-view .review-score {
+  margin-left: 8px;
+  color: var(--gold);
+  font-size: 13px;
+  letter-spacing: 0.05em;
+}
+
 .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

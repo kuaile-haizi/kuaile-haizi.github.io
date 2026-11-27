@@ -717,31 +717,64 @@ body {
   color: rgba(185, 168, 214, 0.75);
 }
 
-.boss-link {
-  display: inline-flex;
+.boss-cta {
+  display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 12px;
+  width: min(100%, 360px);
   margin-top: 2px;
-  padding: 10px 18px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.045);
-  color: var(--muted);
-  font-size: 13px;
-  letter-spacing: 0.06em;
+  padding: 13px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 209, 102, 0.28);
+  background:
+    linear-gradient(120deg, rgba(255, 209, 102, 0.1), rgba(255, 45, 111, 0.07)),
+    rgba(255, 255, 255, 0.03);
+  color: var(--text);
   text-decoration: none;
-  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  transition: transform 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.boss-link:hover {
-  color: #fff;
-  border-color: rgba(255, 209, 102, 0.5);
-  background: rgba(255, 209, 102, 0.08);
-  transform: translateY(-1px);
+.boss-cta:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 209, 102, 0.65);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35), 0 0 26px rgba(255, 209, 102, 0.12);
 }
 
-.boss-link-arrow {
+.boss-cta-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  font-size: 18px;
+  background: linear-gradient(135deg, rgba(255, 209, 102, 0.25), rgba(255, 45, 111, 0.2));
+  border: 1px solid rgba(255, 209, 102, 0.3);
+}
+
+.boss-cta-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.boss-cta-text b {
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.boss-cta-text small {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.boss-cta-arrow {
   color: var(--gold);
+  font-size: 18px;
   font-weight: 800;
 }
 

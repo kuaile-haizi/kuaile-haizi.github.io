@@ -28,8 +28,12 @@
     ownerWelcome: $('#ownerWelcome'),
     requestForm: $('#requestForm'),
     requestMsg: $('#requestMsg'),
+    requestImage: $('#requestImage'),
+    requestImageHint: $('#requestImageHint'),
     myList: $('#myList'),
     myCount: $('#myCount'),
+    bossMore: $('#bossMore'),
+    ownerMore: $('#ownerMore'),
     bossRefresh: $('#bossRefresh'),
     ownerRefresh: $('#ownerRefresh'),
     adminList: $('#adminList'),
@@ -62,14 +66,23 @@
 
   sb = window.supabase.createClient(cfg.url, cfg.anonKey);
 
+  var PAGE_SIZE = 8;
+
   var state = {
     user: null,
     profile: null,
     currentUserId: null,
     filter: 'all',
     requests: [],
+    reviews: [],
     bossAccounts: [],
+    bossVisible: PAGE_SIZE,
+    ownerVisible: PAGE_SIZE,
+    ownerLoaded: false,
+    bossLoaded: false,
     resetUserId: null,
+    autoTimer: 0,
+    autoBusy: false,
     busy: false
   };
 
@@ -134,9 +147,12 @@
         els.authView.hidden = true;
         els.ownerView.hidden = true;
         els.bossView.hidden = false;
+        document.title = '老板留言 · 代肝催工事务所';
         els.bossWelcome.textContent = '你好，' + name + '。在这里提交需求，并随时查看店主处理到哪一步。';
         await loadBossRequests();
       }
+
+      startAutoRefresh();
     } catch (err) {
       console.error(err);
       toast('加载账号信息失败：' + friendlyError(err), true);
@@ -172,6 +188,15 @@
     state.profile = null;
     state.currentUserId = null;
     state.requests = [];
+    state.reviews = [];
+    state.bossAccounts = [];
+    state.ownerLoaded = false;
+    state.bossLoaded = false;
+    state.bossVisible = PAGE_SIZE;
+    state.ownerVisible = PAGE_SIZE;
+    window.clearInterval(state.autoTimer);
+    state.autoTimer = 0;
+    document.title = '老板留言 · 代肝催工事务所';
     showAuth();
     els.navUser.hidden = true;
     els.logoutBtn.hidden = true;
@@ -233,30 +258,39 @@
   /* ============================================================
      老板数据
      ============================================================ */
-  async function loadBossRequests() {
+  async function loadBossRequests(silent) {
     if (!state.user) return;
-    els.myList.innerHTML = '<p class="empty">加载中…</p>';
+    if (!silent) els.myList.innerHTML = '<p class="empty">加载中…</p>';
     try {
-      var res = await sb
-        .from('requests')
-        .select('*')
-        .eq('boss_id', state.user.id)
-        .order('created_at', { ascending: false });
+      var results = await Promise.all([
+        sb.from('requests').select('*').eq('boss_id', state.user.id).order('created_at', { ascending: false }),
+        sb.from('reviews').select('*').eq('boss_id', state.user.id)
+      ]);
 
-      if (res.error) throw res.error;
-      state.requests = res.data || [];
+      if (results[0].error) throw results[0].error;
+      var next = results[0].data || [];
+      var changed = diffRequests(state.requests, next);
+      state.requests = next;
+      state.reviews = results[1].error ? [] : (results[1].data || []);
+      await attachImages(state.requests);
+      state.bossLoaded = true;
+      state.bossVisible = Math.max(PAGE_SIZE, state.bossVisible);
       renderBossRequests();
+
+      if (silent && changed) toast('你的需求状态有更新，已自动刷新。');
     } catch (err) {
       console.error(err);
-      els.myList.innerHTML = '<p class="empty">加载失败：' + escapeHtml(friendlyError(err)) + '</p>';
+      if (!silent) els.myList.innerHTML = '<p class="empty">加载失败：' + escapeHtml(friendlyError(err)) + '</p>';
     }
   }
 
   function renderBossRequests() {
-    var list = state.requests;
-    els.myCount.textContent = list.length + ' 条';
+    var all = state.requests;
+    var list = all.slice(0, state.bossVisible);
+    els.myCount.textContent = all.length + ' 条';
+    els.bossMore.hidden = all.length <= list.length;
 
-    if (!list.length) {
+    if (!all.length) {
       els.myList.innerHTML = '<p class="empty">还没有提交过需求。填写左侧表单，店主就能看到。</p>';
       return;
     }
@@ -266,6 +300,7 @@
       var note = item.owner_note
         ? '<div class="req-note"><b>店主回复</b>' + escapeHtml(item.owner_note) + '</div>'
         : '';
+      var review = item.status === 'completed' ? bossReviewBlock(item) : '';
       return (
         '<article class="req-card" data-status="' + escapeHtml(item.status) + '">' +
           '<div class="req-top">' +
@@ -285,29 +320,66 @@
             (item.note ? reqField('备注', item.note, true) : '') +
           '</div>' +
           note +
+          imageBlock(item) +
+          review +
           '<div class="req-footer"><span>' + escapeHtml(meta.hint) + '</span></div>' +
         '</article>'
       );
     }).join('');
   }
 
+  function bossReviewBlock(item) {
+    var review = reviewFor(item.id);
+    if (review) {
+      return (
+        '<div class="review-view">' +
+          '<b>我的评价</b>' +
+          '<span class="review-score">' + stars(review.rating) + '</span>' +
+          (review.content ? '<p>' + escapeHtml(review.content) + '</p>' : '') +
+        '</div>'
+      );
+    }
+
+    return (
+      '<div class="review-box" data-review-request="' + escapeHtml(String(item.id)) + '" data-rating="0">' +
+        '<div class="review-title">给这次代肝打个分</div>' +
+        '<div class="review-stars">' +
+          [1, 2, 3, 4, 5].map(function (n) {
+            return '<button type="button" data-star="' + n + '" aria-label="' + n + ' 星">★</button>';
+          }).join('') +
+        '</div>' +
+        '<textarea class="review-text" maxlength="300" placeholder="说说体验（可选）"></textarea>' +
+        '<button class="btn btn-sm btn-ghost" type="button" data-review-submit>提交评价</button>' +
+      '</div>'
+    );
+  }
+
   /* ============================================================
      店主数据
      ============================================================ */
-  async function loadOwnerRequests() {
-    els.adminList.innerHTML = '<p class="empty">加载中…</p>';
+  async function loadOwnerRequests(silent) {
+    if (!silent) els.adminList.innerHTML = '<p class="empty">加载中…</p>';
     try {
-      var res = await sb
-        .from('requests')
-        .select('*')
-        .order('created_at', { ascending: false });
+      var results = await Promise.all([
+        sb.from('requests').select('*').order('created_at', { ascending: false }),
+        sb.from('reviews').select('*')
+      ]);
 
-      if (res.error) throw res.error;
+      if (results[0].error) throw results[0].error;
+      var requests = results[0].data || [];
+      state.reviews = results[1].error ? [] : (results[1].data || []);
+      var previousIds = {};
+      state.requests.forEach(function (item) { previousIds[item.id] = true; });
+      var newCount = 0;
+      if (state.ownerLoaded) {
+        requests.forEach(function (item) {
+          if (!previousIds[item.id]) newCount += 1;
+        });
+      }
 
-      var requests = res.data || [];
       var ids = Array.from(new Set(requests.map(function (item) { return item.boss_id; })));
-
       var profileMap = {};
+
       if (ids.length) {
         var profRes = await sb
           .from('profiles')
@@ -325,12 +397,20 @@
         item.boss = profileMap[item.boss_id] || null;
         return item;
       });
+      await attachImages(state.requests);
+      state.ownerLoaded = true;
+      state.ownerVisible = Math.max(PAGE_SIZE, state.ownerVisible);
 
       updateFilterCounts();
       renderOwnerRequests();
+      updateOwnerTitle();
+
+      if (silent && newCount > 0) {
+        toast('收到 ' + newCount + ' 条新老板留言，已自动刷新。');
+      }
     } catch (err) {
       console.error(err);
-      els.adminList.innerHTML = '<p class="empty">加载失败：' + escapeHtml(friendlyError(err)) + '</p>';
+      if (!silent) els.adminList.innerHTML = '<p class="empty">加载失败：' + escapeHtml(friendlyError(err)) + '</p>';
     }
   }
 
@@ -398,11 +478,16 @@
   async function functionErrorMessage(error) {
     var message = (error && (error.message || error.error_description)) || '重置失败';
     try {
-      if (error && error.context && typeof error.context.json === 'function') {
-        var body = await error.context.json();
+      if (error && error.context) {
+        var body = await error.context.clone().json();
         if (body && body.error) message = body.error;
       }
-    } catch (e) {}
+    } catch (e) {
+      try {
+        var text = await error.context.clone().text();
+        if (text) message = text.slice(0, 200);
+      } catch (e2) {}
+    }
     if (/Failed to send a request to the Edge Function|Function not found|404/i.test(message)) {
       return '重置服务还没部署，请先在 Supabase 部署 admin-reset-password Edge Function。';
     }
@@ -470,11 +555,20 @@
     }
   });
 
-  function renderOwnerRequests() {    var list = state.requests.filter(function (item) {
-      return state.filter === 'all' || item.status === state.filter;
+  function renderOwnerRequests() {
+    var drafts = {};
+    $$('#adminList .req-card[data-id]').forEach(function (card) {
+      var input = card.querySelector('[data-note]');
+      if (input) drafts[card.getAttribute('data-id')] = input.value;
     });
 
+    var filtered = state.requests.filter(function (item) {
+      return state.filter === 'all' || item.status === state.filter;
+    });
+    var list = filtered.slice(0, state.ownerVisible);
+
     updateFilterCounts();
+    els.ownerMore.hidden = filtered.length <= list.length;
 
     if (!list.length) {
       els.adminList.innerHTML = '<p class="empty">这个分类下还没有留言。</p>';
@@ -486,6 +580,13 @@
       var boss = item.boss || {};
       var canAct = item.status === 'pending' || item.status === 'accepted';
       var actions = '';
+      var review = reviewFor(item.id);
+      var reviewHtml = review
+        ? '<div class="review-view"><b>老板评价</b>' +
+            '<span class="review-score">' + stars(review.rating) + '</span>' +
+            (review.content ? '<p>' + escapeHtml(review.content) + '</p>' : '') +
+          '</div>'
+        : '';
 
       if (canAct) {
         var buttons = '';
@@ -529,7 +630,9 @@
             (item.note ? reqField('备注', item.note, true) : '') +
           '</div>' +
           note +
+          imageBlock(item) +
           actions +
+          reviewHtml +
           '<div class="req-footer">' +
             '<span>提交 ' + escapeHtml(formatTime(item.created_at)) + '</span>' +
             '<span>更新 ' + escapeHtml(formatTime(item.updated_at)) + '</span>' +
@@ -537,6 +640,12 @@
         '</article>'
       );
     }).join('');
+
+    Object.keys(drafts).forEach(function (id) {
+      var card = els.adminList.querySelector('.req-card[data-id="' + id + '"]');
+      var input = card ? card.querySelector('[data-note]') : null;
+      if (input && drafts[id]) input.value = drafts[id];
+    });
   }
 
   function updateFilterCounts() {
@@ -555,10 +664,91 @@
     var button = event.target.closest('button[data-filter]');
     if (!button) return;
     state.filter = button.getAttribute('data-filter');
+    state.ownerVisible = PAGE_SIZE;
     $$('.filter', els.filters).forEach(function (item) {
       item.classList.toggle('is-active', item === button);
     });
     renderOwnerRequests();
+  });
+
+  els.bossMore.addEventListener('click', function () {
+    state.bossVisible += PAGE_SIZE;
+    renderBossRequests();
+  });
+
+  els.ownerMore.addEventListener('click', function () {
+    state.ownerVisible += PAGE_SIZE;
+    renderOwnerRequests();
+  });
+
+  els.myList.addEventListener('click', async function (event) {
+    var star = event.target.closest('button[data-star]');
+    if (star) {
+      var box = star.closest('.review-box');
+      var rating = Number(star.getAttribute('data-star'));
+      box.setAttribute('data-rating', String(rating));
+      $$('.review-stars button', box).forEach(function (button) {
+        button.classList.toggle('is-on', Number(button.getAttribute('data-star')) <= rating);
+      });
+      return;
+    }
+
+    var submit = event.target.closest('button[data-review-submit]');
+    if (!submit) return;
+
+    var reviewBox = submit.closest('.review-box');
+    if (!reviewBox) return;
+    var requestId = Number(reviewBox.getAttribute('data-review-request'));
+    var ratingValue = Number(reviewBox.getAttribute('data-rating'));
+    var text = reviewBox.querySelector('.review-text').value.trim();
+
+    if (!ratingValue) {
+      toast('先点星星打个分吧。', true);
+      return;
+    }
+
+    submit.disabled = true;
+    try {
+      var res = await sb.from('reviews').insert({
+        request_id: requestId,
+        boss_id: state.user.id,
+        rating: ratingValue,
+        content: text
+      });
+      if (res.error) throw res.error;
+      toast('评价已提交，谢谢老板！');
+      await loadBossRequests(true);
+    } catch (err) {
+      console.error(err);
+      toast('评价失败：' + friendlyError(err), true);
+      submit.disabled = false;
+    }
+  });
+
+  function startAutoRefresh() {
+    window.clearInterval(state.autoTimer);
+    state.autoTimer = window.setInterval(function () {
+      if (!state.user || document.hidden || state.autoBusy) return;
+
+      if (!els.ownerView.hidden) {
+        if (hasFocusInside(els.ownerView)) return;
+        state.autoBusy = true;
+        loadOwnerRequests(true).finally(function () { state.autoBusy = false; });
+      } else if (!els.bossView.hidden) {
+        if (hasFocusInside(els.myList)) return;
+        state.autoBusy = true;
+        loadBossRequests(true).finally(function () { state.autoBusy = false; });
+      }
+    }, 15000);
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden || !state.user || state.autoBusy) return;
+    if (!els.ownerView.hidden && !hasFocusInside(els.ownerView)) {
+      loadOwnerRequests(true);
+    } else if (!els.bossView.hidden && !hasFocusInside(els.myList)) {
+      loadBossRequests(true);
+    }
   });
 
   els.adminList.addEventListener('click', async function (event) {
@@ -631,6 +821,7 @@
     var contact = form.contact.value.trim();
     var deadline = form.deadline.value;
     var note = form.note.value.trim();
+    var imageFile = els.requestImage && els.requestImage.files ? els.requestImage.files[0] : null;
 
     if (!gameName || !gameAccount || !gameNickname) {
       setRequestMessage('游戏名称、游戏账号、游戏昵称都是必填的。', 'error');
@@ -639,8 +830,15 @@
 
     setFormBusy(form, true);
     setRequestMessage('提交中…', '');
+    var imagePath = '';
 
     try {
+      if (imageFile) {
+        setRequestMessage('截图上传中…', '');
+        imagePath = await uploadScreenshot(imageFile);
+        setRequestMessage('提交中…', '');
+      }
+
       var res = await sb.from('requests').insert({
         boss_id: state.user.id,
         game_name: gameName,
@@ -649,21 +847,40 @@
         demand: demand,
         contact: contact,
         deadline: deadline || null,
-        note: note
+        note: note,
+        image_path: imagePath
       });
 
       if (res.error) throw res.error;
 
       setRequestMessage('提交成功，等店主审核。', 'ok');
       form.reset();
-      toast('需求已提交，等店主审核。');
-      await loadBossRequests();
+      setImageHint('');
+      toast(imageFile ? '需求已提交（含截图），等店主审核。' : '需求已提交，等店主审核。');
+      await loadBossRequests(false);
     } catch (err) {
       console.error(err);
+      if (imagePath) {
+        try { await sb.storage.from('request-images').remove([imagePath]); } catch (e) {}
+      }
       setRequestMessage('提交失败：' + friendlyError(err), 'error');
     } finally {
       setFormBusy(form, false);
     }
+  });
+
+  function setImageHint(text) {
+    if (!els.requestImageHint) return;
+    els.requestImageHint.textContent = text || '支持 JPG / PNG / WebP，自动压缩，只有店主能看到。';
+  }
+
+  els.requestImage.addEventListener('change', function () {
+    var file = els.requestImage.files && els.requestImage.files[0];
+    if (!file) {
+      setImageHint('');
+      return;
+    }
+    setImageHint(file.name + ' · ' + (file.size / 1024 / 1024).toFixed(1) + 'MB');
   });
 
   els.bossRefresh.addEventListener('click', async function () {
@@ -683,6 +900,121 @@
   /* ============================================================
      工具函数
      ============================================================ */
+  function reviewFor(requestId) {
+    return state.reviews.find(function (item) {
+      return Number(item.request_id) === Number(requestId);
+    }) || null;
+  }
+
+  function stars(rating) {
+    var value = Math.max(0, Math.min(5, Number(rating) || 0));
+    return '★★★★★'.slice(0, value) + '☆☆☆☆☆'.slice(0, 5 - value);
+  }
+
+  function imageBlock(item) {
+    if (!item.imageUrl) return '';
+    var url = escapeHtml(item.imageUrl);
+    return (
+      '<div class="req-image">' +
+        '<a href="' + url + '" target="_blank" rel="noreferrer">' +
+          '<img src="' + url + '" alt="老板上传的需求截图" loading="lazy">' +
+        '</a>' +
+      '</div>'
+    );
+  }
+
+  async function attachImages(list) {
+    if (!list || !list.length) return;
+    await Promise.all(list.map(async function (item) {
+      if (!item.image_path) {
+        item.imageUrl = '';
+        return;
+      }
+      try {
+        var res = await sb.storage
+          .from('request-images')
+          .createSignedUrl(item.image_path, 3600);
+        item.imageUrl = res.data && res.data.signedUrl ? res.data.signedUrl : '';
+      } catch (err) {
+        item.imageUrl = '';
+      }
+    }));
+  }
+
+  function diffRequests(previous, next) {
+    if (previous.length !== next.length) return true;
+    var map = {};
+    previous.forEach(function (item) { map[String(item.id)] = item; });
+    return next.some(function (item) {
+      var old = map[String(item.id)];
+      return !old || old.status !== item.status || old.owner_note !== item.owner_note || old.updated_at !== item.updated_at;
+    });
+  }
+
+  function updateOwnerTitle() {
+    var pending = state.requests.filter(function (item) { return item.status === 'pending'; }).length;
+    document.title = pending > 0
+      ? '(' + pending + ') 店主后台 · 代肝催工事务所'
+      : '店主后台 · 代肝催工事务所';
+  }
+
+  function hasFocusInside(element) {
+    if (!element || !document.activeElement) return false;
+    if (!element.contains(document.activeElement)) return false;
+    return /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(document.activeElement.tagName);
+  }
+
+  function compressImage(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var image = new Image();
+      image.onload = function () {
+        try {
+          var max = 1280;
+          var scale = Math.min(1, max / Math.max(image.width, image.height));
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(image.width * scale));
+          canvas.height = Math.max(1, Math.round(image.height * scale));
+          var ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#1a1028';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+          URL.revokeObjectURL(url);
+          canvas.toBlob(function (blob) {
+            if (!blob) { reject(new Error('图片压缩失败')); return; }
+            resolve(blob);
+          }, 'image/jpeg', 0.82);
+        } catch (err) {
+          URL.revokeObjectURL(url);
+          reject(err);
+        }
+      };
+      image.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error('图片打不开，换一张试试'));
+      };
+      image.src = url;
+    });
+  }
+
+  async function uploadScreenshot(file) {
+    if (!file) return '';
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error('截图不能超过 10MB');
+    }
+    var blob = await compressImage(file);
+    var random = (window.crypto && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : String(Date.now()) + '-' + Math.random().toString(16).slice(2);
+    var path = state.user.id + '/' + random + '.jpg';
+    var res = await sb.storage.from('request-images').upload(path, blob, {
+      contentType: 'image/jpeg',
+      upsert: false
+    });
+    if (res.error) throw res.error;
+    return path;
+  }
+
   function reqField(label, value, wide) {
     var text = value === null || value === undefined || value === '' ? '未填写' : String(value);
     var empty = text === '未填写' ? ' is-empty' : '';

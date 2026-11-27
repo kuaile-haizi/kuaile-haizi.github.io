@@ -121,7 +121,12 @@
             </div>
             <label class="field">
               <span>备注 / 截图说明</span>
-              <textarea name="note" rows="2" maxlength="500" placeholder="区服、段位、预算或其它说明；截图可以稍后发店主"></textarea>
+              <textarea name="note" rows="2" maxlength="500" placeholder="区服、段位、预算或其它说明"></textarea>
+            </label>
+            <label class="field">
+              <span>截图（可选）</span>
+              <input type="file" id="requestImage" accept="image/png,image/jpeg,image/webp" class="file-input">
+              <small class="form-hint" id="requestImageHint">支持 JPG / PNG / WebP，自动压缩，只有店主能看到。</small>
             </label>
             <button class="btn btn-primary" type="submit">提交需求</button>
             <p class="form-msg" id="requestMsg" role="status"></p>
@@ -135,6 +140,9 @@
           </div>
           <div class="request-list" id="myList">
             <p class="empty">还没有提交过需求。</p>
+          </div>
+          <div class="load-more">
+            <button class="btn btn-ghost btn-sm" id="bossMore" type="button" hidden>加载更多</button>
           </div>
         </div>
       </div>
@@ -182,6 +190,9 @@
 
       <div class="request-list admin-list" id="adminList">
         <p class="empty">还没有老板留言。</p>
+      </div>
+      <div class="load-more">
+        <button class="btn btn-ghost btn-sm" id="ownerMore" type="button" hidden>加载更多</button>
       </div>
     </section>
   </main>
