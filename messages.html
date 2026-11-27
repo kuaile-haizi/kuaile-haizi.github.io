@@ -169,6 +169,17 @@
         <a class="btn btn-ghost btn-sm" href="https://supabase.com/dashboard/project/hxxqacdeioshtvzhgroj/auth/users" target="_blank" rel="noreferrer">打开用户管理 →</a>
       </div>
 
+      <div class="panel accounts-panel">
+        <div class="list-head">
+          <h2>老板账号</h2>
+          <span class="count" id="bossAccountCount">0 个</span>
+        </div>
+        <p class="panel-sub">老板忘记密码时，直接这里重置；把新密码发给老板即可。</p>
+        <div class="account-list" id="bossAccounts">
+          <p class="empty">还没有老板账号。</p>
+        </div>
+      </div>
+
       <div class="request-list admin-list" id="adminList">
         <p class="empty">还没有老板留言。</p>
       </div>
@@ -176,6 +187,29 @@
   </main>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <div class="modal" id="resetModal" hidden>
+    <div class="modal-backdrop" data-close="1"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="resetTitle">
+      <h3 id="resetTitle">重置老板密码</h3>
+      <p class="modal-sub" id="resetTarget"></p>
+      <form class="form" id="resetForm" novalidate>
+        <label class="field">
+          <span>新密码</span>
+          <input type="password" id="resetPassword" minlength="6" autocomplete="new-password" placeholder="至少 6 位" required>
+        </label>
+        <label class="field">
+          <span>确认新密码</span>
+          <input type="password" id="resetConfirm" minlength="6" autocomplete="new-password" placeholder="再输一次" required>
+        </label>
+        <p class="form-msg" id="resetMsg" role="status"></p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" type="button" id="resetCancel">取消</button>
+          <button class="btn btn-primary" type="submit">确认重置</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script src="vendor/supabase.js"></script>
   <script src="assets/supabase-config.js"></script>

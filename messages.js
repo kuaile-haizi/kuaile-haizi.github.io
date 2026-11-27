@@ -33,6 +33,15 @@
     bossRefresh: $('#bossRefresh'),
     ownerRefresh: $('#ownerRefresh'),
     adminList: $('#adminList'),
+    bossAccounts: $('#bossAccounts'),
+    bossAccountCount: $('#bossAccountCount'),
+    resetModal: $('#resetModal'),
+    resetTarget: $('#resetTarget'),
+    resetForm: $('#resetForm'),
+    resetPassword: $('#resetPassword'),
+    resetConfirm: $('#resetConfirm'),
+    resetMsg: $('#resetMsg'),
+    resetCancel: $('#resetCancel'),
     filters: $('#filters'),
     countAll: $('#countAll'),
     countPending: $('#countPending'),
@@ -59,6 +68,8 @@
     currentUserId: null,
     filter: 'all',
     requests: [],
+    bossAccounts: [],
+    resetUserId: null,
     busy: false
   };
 
@@ -118,7 +129,7 @@
         els.bossView.hidden = true;
         els.ownerView.hidden = false;
         els.ownerWelcome.textContent = '你正在以店主身份查看全部老板的需求。';
-        await loadOwnerRequests();
+        await Promise.all([loadOwnerRequests(), loadBossAccounts()]);
       } else {
         els.authView.hidden = true;
         els.ownerView.hidden = true;
@@ -323,8 +334,143 @@
     }
   }
 
-  function renderOwnerRequests() {
-    var list = state.requests.filter(function (item) {
+  async function loadBossAccounts() {
+    els.bossAccounts.innerHTML = '<p class="empty">加载中…</p>';
+    try {
+      var res = await sb
+        .from('profiles')
+        .select('id, display_name, email, role')
+        .eq('role', 'boss')
+        .order('created_at', { ascending: false });
+
+      if (res.error) throw res.error;
+      state.bossAccounts = res.data || [];
+      renderBossAccounts();
+    } catch (err) {
+      console.error(err);
+      els.bossAccounts.innerHTML = '<p class="empty">加载失败：' + escapeHtml(friendlyError(err)) + '</p>';
+    }
+  }
+
+  function renderBossAccounts() {
+    var accounts = state.bossAccounts;
+    els.bossAccountCount.textContent = accounts.length + ' 个';
+
+    if (!accounts.length) {
+      els.bossAccounts.innerHTML = '<p class="empty">还没有老板账号。去 Supabase → Authentication → Users 创建后刷新这里。</p>';
+      return;
+    }
+
+    els.bossAccounts.innerHTML = accounts.map(function (account) {
+      var name = account.display_name || account.email || '未命名老板';
+      return (
+        '<div class="account-row">' +
+          '<div class="account-main">' +
+            '<div class="account-name">' + escapeHtml(name) + '</div>' +
+            '<div class="account-email">' + escapeHtml(account.email || '') + '</div>' +
+          '</div>' +
+          '<button class="btn btn-ghost btn-sm" type="button" data-reset="' + escapeHtml(account.id) + '">重置密码</button>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  function openResetModal(account) {
+    state.resetUserId = account.id;
+    var name = account.display_name || account.email || '老板';
+    els.resetTarget.textContent = '给「' + name + '」(' + (account.email || '') + ') 设置新密码，重置后把新密码发给他。';
+    els.resetForm.reset();
+    setResetMessage('', '');
+    els.resetModal.hidden = false;
+    window.setTimeout(function () { els.resetPassword.focus(); }, 30);
+  }
+
+  function closeResetModal() {
+    els.resetModal.hidden = true;
+    state.resetUserId = null;
+  }
+
+  function setResetMessage(text, type) {
+    els.resetMsg.textContent = text || '';
+    els.resetMsg.className = 'form-msg' + (type ? ' is-' + type : '');
+  }
+
+  async function functionErrorMessage(error) {
+    var message = (error && (error.message || error.error_description)) || '重置失败';
+    try {
+      if (error && error.context && typeof error.context.json === 'function') {
+        var body = await error.context.json();
+        if (body && body.error) message = body.error;
+      }
+    } catch (e) {}
+    if (/Failed to send a request to the Edge Function|Function not found|404/i.test(message)) {
+      return '重置服务还没部署，请先在 Supabase 部署 admin-reset-password Edge Function。';
+    }
+    return message;
+  }
+
+  els.bossAccounts.addEventListener('click', function (event) {
+    var button = event.target.closest('button[data-reset]');
+    if (!button) return;
+    var account = state.bossAccounts.find(function (item) {
+      return item.id === button.getAttribute('data-reset');
+    });
+    if (account) openResetModal(account);
+  });
+
+  els.resetCancel.addEventListener('click', closeResetModal);
+
+  els.resetModal.addEventListener('click', function (event) {
+    if (event.target && event.target.getAttribute('data-close') === '1') closeResetModal();
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && !els.resetModal.hidden) closeResetModal();
+  });
+
+  els.resetForm.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    if (!state.resetUserId) return;
+
+    var password = els.resetPassword.value;
+    var confirm = els.resetConfirm.value;
+    if (password.length < 6) {
+      setResetMessage('新密码至少 6 位。', 'error');
+      return;
+    }
+    if (password !== confirm) {
+      setResetMessage('两次输入的新密码不一致。', 'error');
+      return;
+    }
+
+    var submit = els.resetForm.querySelector('button[type="submit"]');
+    var inputs = [els.resetPassword, els.resetConfirm];
+    submit.disabled = true;
+    inputs.forEach(function (input) { input.disabled = true; });
+    setResetMessage('重置中…', '');
+
+    try {
+      var res = await sb.functions.invoke('admin-reset-password', {
+        body: { userId: state.resetUserId, newPassword: password }
+      });
+
+      if (res.error) throw res.error;
+      if (res.data && res.data.error) throw new Error(res.data.error);
+
+      var account = state.bossAccounts.find(function (item) { return item.id === state.resetUserId; });
+      var who = account ? (account.display_name || account.email) : '老板';
+      closeResetModal();
+      toast('已重置「' + who + '」的密码，记得把新密码发给他。');
+    } catch (err) {
+      console.error(err);
+      setResetMessage(await functionErrorMessage(err), 'error');
+    } finally {
+      submit.disabled = false;
+      inputs.forEach(function (input) { input.disabled = false; });
+    }
+  });
+
+  function renderOwnerRequests() {    var list = state.requests.filter(function (item) {
       return state.filter === 'all' || item.status === state.filter;
     });
 
@@ -529,7 +675,7 @@
 
   els.ownerRefresh.addEventListener('click', async function () {
     els.ownerRefresh.disabled = true;
-    await loadOwnerRequests();
+    await Promise.all([loadOwnerRequests(), loadBossAccounts()]);
     els.ownerRefresh.disabled = false;
     toast('已刷新');
   });
