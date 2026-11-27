@@ -206,7 +206,7 @@
       <div class="contact-copy">
         <p class="contact-eyebrow">CONTACT · 联系店主</p>
         <h2>下单 / 付款 / 售后</h2>
-        <p class="contact-lead">加微信、进 QQ 群或直接打电话都行；付款请扫右侧微信经营收款码，付完把截图发给店主。</p>
+        <p class="contact-lead">加微信、进 QQ 群或直接打电话都行；付款请展开右侧收款码，阅读并同意说明后扫码，付完把截图发给店主。</p>
         <div class="contact-rows">
           <div class="contact-row">
             <span class="contact-label">微信号</span>
@@ -231,16 +231,25 @@
         </div>
         <p class="contact-note">加微信请备注「代肝」；QQ 群搜群号加入；电话如未接通，发短信或加微信留言。</p>
       </div>
-      <figure class="pay-card">
-        <div class="pay-qr">
-          <img class="pay-img" src="assets/wechat-pay.png" alt="微信经营收款码" loading="lazy">
-          <span class="pay-fallback">收款码<br>暂未上传</span>
-        </div>
-        <figcaption>
+      <div class="pay-card">
+        <details class="pay-details">
+          <summary class="pay-summary">微信付款 · 点击展开</summary>
+          <div class="pay-panel">
+            <div class="pay-consent">
+              <input type="checkbox" id="payAgree" data-pay-agree>
+              <label for="payAgree">我已阅读并同意 <a href="terms.html" target="_blank" rel="noreferrer">《付款与服务说明》</a>，并了解代肝服务的账号风险与退款规则。</label>
+            </div>
+            <div class="pay-qr" hidden>
+              <img class="pay-img" src="assets/wechat-pay.png" alt="微信经营收款码" loading="lazy">
+              <span class="pay-fallback">收款码<br>暂未上传</span>
+            </div>
+          </div>
+        </details>
+        <div class="pay-caption">
           <b>微信扫码付款</b>
-          <small>黑猫警长 · 经营收款码</small>
-        </figcaption>
-      </figure>
+          <small>勾选同意后显示收款码</small>
+        </div>
+      </div>
     </div>
   </footer>
 
