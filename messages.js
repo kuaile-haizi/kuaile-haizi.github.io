@@ -37,6 +37,12 @@
     bossRefresh: $('#bossRefresh'),
     ownerRefresh: $('#ownerRefresh'),
     adminList: $('#adminList'),
+    cleanupBar: $('#cleanupBar'),
+    statCards: $('#statCards'),
+    urgeChart: $('#urgeChart'),
+    gameStats: $('#gameStats'),
+    statsUpdated: $('#statsUpdated'),
+    exportCsv: $('#exportCsv'),
     bossAccounts: $('#bossAccounts'),
     bossAccountCount: $('#bossAccountCount'),
     resetModal: $('#resetModal'),
@@ -75,6 +81,8 @@
     filter: 'all',
     requests: [],
     reviews: [],
+    urges: [],
+    urgeStats: null,
     bossAccounts: [],
     bossVisible: PAGE_SIZE,
     ownerVisible: PAGE_SIZE,
@@ -142,7 +150,8 @@
         els.bossView.hidden = true;
         els.ownerView.hidden = false;
         els.ownerWelcome.textContent = '你正在以店主身份查看全部老板的需求。';
-        await Promise.all([loadOwnerRequests(), loadBossAccounts()]);
+        await loadOwnerRequests();
+        await Promise.all([loadBossAccounts(), loadOwnerStats()]);
       } else {
         els.authView.hidden = true;
         els.ownerView.hidden = true;
@@ -189,6 +198,8 @@
     state.currentUserId = null;
     state.requests = [];
     state.reviews = [];
+    state.urges = [];
+    state.urgeStats = null;
     state.bossAccounts = [];
     state.ownerLoaded = false;
     state.bossLoaded = false;
@@ -455,6 +466,165 @@
     }).join('');
   }
 
+  async function loadOwnerStats() {
+    try {
+      var res = await sb.rpc('owner_urge_stats');
+      if (res.error) throw res.error;
+      state.urgeStats = res.data || null;
+    } catch (err) {
+      console.warn('读取催更统计失败', err);
+      state.urgeStats = null;
+    }
+    renderOwnerStats();
+  }
+
+  function localDayKey(date) {
+    return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+  }
+
+  function renderOwnerStats() {
+    if (!els.statCards || !els.urgeChart || !els.gameStats) return;
+
+    var now = new Date();
+    var stats = state.urgeStats || {};
+    var dayCounts = {};
+
+    (stats.days || []).forEach(function (item) {
+      if (item && item.day) dayCounts[item.day] = Number(item.count) || 0;
+    });
+
+    var totalUrges = Number(stats.total) || 0;
+    var uniqueCount = Number(stats.unique) || 0;
+    var today = Number(stats.today) || 0;
+    var pending = state.requests.filter(function (item) { return item.status === 'pending'; }).length;
+    var completed = state.requests.filter(function (item) { return item.status === 'completed'; }).length;
+    var ratings = state.reviews.map(function (item) { return Number(item.rating); }).filter(function (n) { return n > 0; });
+    var avgRating = ratings.length
+      ? (ratings.reduce(function (a, b) { return a + b; }, 0) / ratings.length)
+      : 0;
+
+    var cards = [
+      { k: '总催更', v: totalUrges, s: '全站点击次数' },
+      { k: '独立访客', v: uniqueCount, s: '匿名统计' },
+      { k: '今日催更', v: today, s: '今天 00:00 起' },
+      { k: '需求总数', v: state.requests.length, s: '待审核 ' + pending + ' 条' },
+      { k: '已完成', v: completed, s: '累计完成委托' },
+      { k: '平均评分', v: ratings.length ? avgRating.toFixed(1) : '—', s: ratings.length + ' 条评价' }
+    ];
+
+    els.statCards.innerHTML = cards.map(function (card) {
+      return (
+        '<div class="stat-card">' +
+          '<div class="stat-k">' + escapeHtml(card.k) + '</div>' +
+          '<div class="stat-v">' + escapeHtml(card.v) + '</div>' +
+          '<div class="stat-s">' + escapeHtml(card.s) + '</div>' +
+        '</div>'
+      );
+    }).join('');
+
+    // 最近 7 天
+    var days = [];
+    for (var i = 6; i >= 0; i -= 1) {
+      var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      days.push({
+        key: localDayKey(d),
+        label: (d.getMonth() + 1) + '/' + d.getDate(),
+        count: dayCounts[localDayKey(d)] || 0
+      });
+    }
+    var max = Math.max.apply(null, days.map(function (d) { return d.count; }).concat([1]));
+
+    els.urgeChart.innerHTML = days.map(function (day) {
+      var height = Math.max(2, Math.round((day.count / max) * 100));
+      return (
+        '<div class="chart-col" title="' + escapeHtml(day.key + '：' + day.count + ' 次') + '">' +
+          '<div class="chart-bar" style="height:' + height + '%"></div>' +
+          '<div class="chart-label">' + escapeHtml(day.label) + '</div>' +
+        '</div>'
+      );
+    }).join('');
+
+    // 游戏分布
+    var gameCounts = {};
+    state.requests.forEach(function (item) {
+      var name = item.game_name || '未填写';
+      gameCounts[name] = (gameCounts[name] || 0) + 1;
+    });
+    var games = Object.keys(gameCounts)
+      .map(function (name) { return { name: name, count: gameCounts[name] }; })
+      .sort(function (a, b) { return b.count - a.count; })
+      .slice(0, 6);
+
+    els.gameStats.innerHTML = games.length
+      ? games.map(function (game) {
+          return '<div class="game-row"><span>' + escapeHtml(game.name) + '</span><span>' + game.count + ' 单</span></div>';
+        }).join('')
+      : '<p class="empty">还没有需求数据。</p>';
+
+    if (els.statsUpdated) {
+      els.statsUpdated.textContent = '更新于 ' + now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    }
+  }
+
+  function csvCell(value) {
+    return '"' + String(value === null || value === undefined ? '' : value).replace(/"/g, '""') + '"';
+  }
+
+  function exportRequestsCsv() {
+    if (!state.requests.length) {
+      toast('还没有需求可以导出。', true);
+      return;
+    }
+
+    var header = [
+      '提交时间', '老板', '老板邮箱', '游戏', '游戏账号', '游戏昵称',
+      '代肝需求', '联系方式', '截止时间', '备注', '状态',
+      '店主回复', '评分', '评价', '更新时间'
+    ];
+
+    var rows = state.requests.map(function (item) {
+      var boss = item.boss || {};
+      var review = reviewFor(item.id) || {};
+      return [
+        formatTime(item.created_at),
+        boss.display_name || '',
+        boss.email || '',
+        item.game_name || '',
+        item.game_account || '',
+        item.game_nickname || '',
+        item.demand || '',
+        item.contact || '',
+        item.deadline || '',
+        item.note || '',
+        (STATUS[item.status] || STATUS.pending).label,
+        item.owner_note || '',
+        review.rating || '',
+        review.content || '',
+        formatTime(item.updated_at)
+      ];
+    });
+
+    var csv = [header].concat(rows)
+      .map(function (row) { return row.map(csvCell).join(','); })
+      .join('\r\n');
+
+    var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    var date = new Date();
+    link.href = url;
+    link.download = '代肝需求-' + localDayKey(date) + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    toast('CSV 已导出。');
+  }
+
+  if (els.exportCsv) {
+    els.exportCsv.addEventListener('click', exportRequestsCsv);
+  }
+
   function openResetModal(account) {
     state.resetUserId = account.id;
     var name = account.display_name || account.email || '老板';
@@ -662,6 +832,7 @@
           '<div class="req-footer">' +
             '<span>提交 ' + escapeHtml(formatTime(item.created_at)) + '</span>' +
             '<span>更新 ' + escapeHtml(formatTime(item.updated_at)) + '</span>' +
+            '<button class="btn btn-sm btn-danger" type="button" data-delete>删除</button>' +
           '</div>' +
         '</article>'
       );
@@ -674,6 +845,28 @@
     });
   }
 
+  async function deleteRequests(items) {
+    if (!items || !items.length) return;
+    var ids = items.map(function (item) { return Number(item.id); });
+    var paths = items.map(function (item) { return item.image_path; }).filter(Boolean);
+
+    var res = await sb.from('requests').delete().in('id', ids);
+    if (res.error) throw res.error;
+
+    if (paths.length) {
+      try {
+        var storageRes = await sb.storage.from('request-images').remove(paths);
+        if (storageRes.error) console.warn('删除截图失败', storageRes.error);
+      } catch (err) {
+        console.warn('删除截图失败', err);
+      }
+    }
+
+    toast('已删除 ' + items.length + ' 条需求。');
+    await loadOwnerRequests();
+    await loadOwnerStats();
+  }
+
   function updateFilterCounts() {
     var counts = { all: state.requests.length, pending: 0, accepted: 0, rejected: 0, completed: 0 };
     state.requests.forEach(function (item) {
@@ -684,6 +877,16 @@
     els.countAccepted.textContent = counts.accepted;
     els.countRejected.textContent = counts.rejected;
     els.countCompleted.textContent = counts.completed;
+
+    if (els.cleanupBar) {
+      $$('[data-clear]', els.cleanupBar).forEach(function (button) {
+        var key = button.getAttribute('data-clear');
+        var count = key === 'all' ? counts.all : (counts[key] || 0);
+        var badge = button.querySelector('[data-clear-count]');
+        if (badge) badge.textContent = count;
+        button.disabled = count === 0;
+      });
+    }
   }
 
   els.filters.addEventListener('click', function (event) {
@@ -706,6 +909,38 @@
     state.ownerVisible += PAGE_SIZE;
     renderOwnerRequests();
   });
+
+  if (els.cleanupBar) {
+    els.cleanupBar.addEventListener('click', async function (event) {
+    var button = event.target.closest('button[data-clear]');
+    if (!button) return;
+
+    var status = button.getAttribute('data-clear');
+    var items = status === 'all'
+      ? state.requests.slice()
+      : state.requests.filter(function (item) { return item.status === status; });
+
+    if (!items.length) {
+      toast('这个分类没有可清理的需求。');
+      return;
+    }
+
+    var labelMap = { completed: '已完成', rejected: '已驳回', accepted: '已接受', all: '全部' };
+    var label = labelMap[status] || status;
+    if (!window.confirm('确定删除 ' + items.length + ' 条「' + label + '」需求吗？\n截图和评价会一起删除，无法恢复。')) return;
+    if (status === 'all' && !window.confirm('最后确认：真的要清空全部需求吗？')) return;
+
+    button.disabled = true;
+    try {
+      await deleteRequests(items);
+    } catch (err) {
+      console.error(err);
+      toast('清理失败：' + friendlyError(err), true);
+    } finally {
+      updateFilterCounts();
+    }
+  });
+  }
 
   els.myList.addEventListener('click', async function (event) {
     var star = event.target.closest('button[data-star]');
@@ -759,7 +994,9 @@
       if (!els.ownerView.hidden) {
         if (hasFocusInside(els.ownerView)) return;
         state.autoBusy = true;
-        loadOwnerRequests(true).finally(function () { state.autoBusy = false; });
+        loadOwnerRequests(true)
+          .then(function () { return loadOwnerStats(); })
+          .finally(function () { state.autoBusy = false; });
       } else if (!els.bossView.hidden) {
         if (hasFocusInside(els.myList)) return;
         state.autoBusy = true;
@@ -771,13 +1008,32 @@
   document.addEventListener('visibilitychange', function () {
     if (document.hidden || !state.user || state.autoBusy) return;
     if (!els.ownerView.hidden && !hasFocusInside(els.ownerView)) {
-      loadOwnerRequests(true);
+      loadOwnerRequests(true).then(function () { return loadOwnerStats(); });
     } else if (!els.bossView.hidden && !hasFocusInside(els.myList)) {
       loadBossRequests(true);
     }
   });
 
   els.adminList.addEventListener('click', async function (event) {
+    var deleteBtn = event.target.closest('button[data-delete]');
+    if (deleteBtn) {
+      var deleteCard = deleteBtn.closest('.req-card');
+      var deleteId = deleteCard ? deleteCard.getAttribute('data-id') : null;
+      var deleteItem = state.requests.find(function (item) { return String(item.id) === String(deleteId); });
+      if (!deleteItem) return;
+      if (!window.confirm('确定删除这条需求吗？\n截图和评价会一起删除，无法恢复。')) return;
+
+      deleteBtn.disabled = true;
+      try {
+        await deleteRequests([deleteItem]);
+      } catch (err) {
+        console.error(err);
+        toast('删除失败：' + friendlyError(err), true);
+        deleteBtn.disabled = false;
+      }
+      return;
+    }
+
     var button = event.target.closest('button[data-action]');
     if (!button) return;
 
@@ -826,6 +1082,7 @@
       var mailSent = await notifyBoss(requestId);
       toast('已' + labels[nextStatus] + '，老板刷新就能看到。' + (mailSent ? ' 邮件已通知老板。' : ''));
       await loadOwnerRequests();
+      await loadOwnerStats();
     } catch (err) {
       console.error(err);
       toast('操作失败：' + friendlyError(err), true);
@@ -925,7 +1182,8 @@
 
   els.ownerRefresh.addEventListener('click', async function () {
     els.ownerRefresh.disabled = true;
-    await Promise.all([loadOwnerRequests(), loadBossAccounts()]);
+    await loadOwnerRequests();
+    await Promise.all([loadBossAccounts(), loadOwnerStats()]);
     els.ownerRefresh.disabled = false;
     toast('已刷新');
   });

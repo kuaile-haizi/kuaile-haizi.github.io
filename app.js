@@ -158,6 +158,11 @@
     /* 在用户手势内解锁音频，保证稍后 setTimeout 里的音效也能播放 */
     ensureAudio();
 
+    /* 通知全站统计：这是一次有效催更 */
+    try {
+      window.dispatchEvent(new CustomEvent('whip:hit'));
+    } catch (err) {}
+
     const popCount = pick(POP_WEIGHTS);
 
     /* 连击：1.8 秒内继续点击就会累计，断档自动归零 */

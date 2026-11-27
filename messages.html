@@ -159,6 +159,29 @@
         <button class="btn btn-ghost" id="ownerRefresh" type="button">刷新</button>
       </div>
 
+      <div class="panel stats-panel">
+        <div class="list-head">
+          <h2>数据统计</h2>
+          <div class="stats-actions">
+            <span id="statsUpdated" class="count"></span>
+            <button class="btn btn-ghost btn-sm" id="exportCsv" type="button">导出需求 CSV</button>
+          </div>
+        </div>
+        <div class="stat-cards" id="statCards">
+          <p class="empty">加载中…</p>
+        </div>
+        <div class="stats-cols">
+          <div class="stats-block">
+            <h3>最近 7 天催更</h3>
+            <div class="chart" id="urgeChart"></div>
+          </div>
+          <div class="stats-block">
+            <h3>游戏分布</h3>
+            <div id="gameStats" class="game-stats"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="admin-bar">
         <div class="filters" id="filters">
           <button class="filter is-active" type="button" data-filter="all">全部 <span id="countAll">0</span></button>
@@ -167,6 +190,15 @@
           <button class="filter" type="button" data-filter="rejected">已驳回 <span id="countRejected">0</span></button>
           <button class="filter" type="button" data-filter="completed">已完成 <span id="countCompleted">0</span></button>
         </div>
+      </div>
+
+      <div class="cleanup-bar" id="cleanupBar">
+        <span class="cleanup-label">清理数据</span>
+        <button class="btn btn-ghost btn-sm" type="button" data-clear="completed">清空已完成 <b data-clear-count="completed">0</b></button>
+        <button class="btn btn-ghost btn-sm" type="button" data-clear="rejected">清空已驳回 <b data-clear-count="rejected">0</b></button>
+        <button class="btn btn-ghost btn-sm" type="button" data-clear="accepted">清空已接受 <b data-clear-count="accepted">0</b></button>
+        <button class="btn btn-ghost btn-sm clear-all" type="button" data-clear="all">清空全部 <b data-clear-count="all">0</b></button>
+        <span class="cleanup-tip">删除后不可恢复，截图和评价会一起删</span>
       </div>
 
       <div class="panel owner-help">
